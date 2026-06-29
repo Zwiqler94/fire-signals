@@ -1,1 +1,1 @@
-node --inspect node_modules/.bin/jest --watch --runInBand
+node --inspect node_modules/.bin/vitest run

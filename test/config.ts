@@ -1,14 +1,14 @@
 import fetch from 'cross-fetch';
 
 export default {
-  apiKey: 'AIzaSyCD1LqWoxivr0hu7YJ_xF6WyAT4_l-Aw0I',
-  authDomain: 'rxfire-test-c497c.firebaseapp.com',
-  databaseURL: 'https://rxfire-test-c497c-default-rtdb.firebaseio.com',
-  projectId: 'rxfire-test-c497c',
-  storageBucket: 'rxfire-test-c497c.appspot.com',
-  messagingSenderId: '498378360465',
-  appId: '1:498378360465:web:4223d73f0f7dd0aa3d6130',
-  measurementId: 'G-K35MQE7EN2',
+  apiKey: 'demo-fire-signals-api-key',
+  authDomain: 'demo-fire-signals.firebaseapp.com',
+  databaseURL: 'https://demo-fire-signals-default-rtdb.firebaseio.com',
+  projectId: 'demo-fire-signals',
+  storageBucket: 'demo-fire-signals.appspot.com',
+  messagingSenderId: '000000000000',
+  appId: '1:000000000000:web:demofiresignals0001',
+  measurementId: 'G-DEMOFIRESIG',
 };
 
 const resolvedEmulatorHubResponse = (async () => {
