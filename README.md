@@ -1,139 +1,119 @@
-# RxFire
+<!-- markdownlint-disable MD013 -->
 
-Firebase and RxJS for all frameworks.
+# FireSignals
 
-## What is RxFire?
+Angular signal-first Firebase helpers rearchitected from RxFire.
 
-- **Observable creators** - Observables bindings for most Firebase web libraries.
-- **Portable** - Use across any framework or no framework at all.
-- **Tree shake-able** - Import only what you need. Shake the rest out with your favorite module bundler like Webpack or Rollup.
-- **Combine multiple data sources** - Need to join two Firestore references? Want to combine an image from Cloud Storage with a Firestore document? Super easy with observables and operators.
-- **Simplify code-splitting of Firebase** - Using RxFire with Webpack makes it easy to load Firebase features on-demand.
+FireSignals keeps the Firebase behavior that made RxFire useful, but exposes
+Angular signal state objects instead of RxJS Observables. The package is
+intended for Angular 21+, Firebase 12+, zoneless-friendly applications, SSR
+stability, and future Angular resource interop.
 
-Status: Beta
-
-## Install
+## Package
 
 ```bash
-# npm
-npm i rxfire firebase rxjs --save
-# yarn
-yarn add rxfire firebase rxjs
+npm i @zwiqler94/fire-signals firebase @angular/core
+yarn add @zwiqler94/fire-signals firebase @angular/core
 ```
 
-Make sure to install Firebase and RxJS individually as they are peer dependencies of RxFire.
+Firebase and Angular are peer dependencies. RxJS is not a FireSignals public
+peer dependency.
 
-## Example use:
+## State Shape
+
+Every helper returns a `FireSignal<T>` resource-shaped state object.
 
 ```ts
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, where, query } from 'firebase/firestore';
-import { collectionData } from 'rxfire/firestore';
-import { tap } from 'rxjs/operators';
-
-const app = initializeApp({ /* config */ });
-const firestore = getFirestore(app);
-const citiesRef = query(
-    collection(firestore, 'cities'),
-    where('state', '==', 'CO')
-);
-
-collectionData(citiesRef, { idField: 'id' })
-  .pipe(
-    tap(cities => console.log('This is just an observable!'))
-  )
-  .subscribe(cities => { /* update UI */ })
+export interface FireSignal<T> {
+  readonly value: Signal<T | undefined>;
+  readonly error: Signal<unknown | undefined>;
+  readonly loading: Signal<boolean>;
+  readonly status: Signal<'loading' | 'ready' | 'error'>;
+  readonly hasValue: Signal<boolean>;
+  destroy(): void;
+}
 ```
 
-## Easily combine multiple Firebase data sources
-
-RxJS provides multiple operators and creation methods for combining observable streams. This makes it easy to combine data from multiple Firebase resources. You can also handle simplify high asynchronous tasks like joins into a flat stream.
-
-The example below streams a list of "cities" from Firestore and then retrieves their image from a Cloud Storage bucket. Both tasks are asynchronous but RxJS makes it easy to combine these tasks together.
+Most helpers accept:
 
 ```ts
-import { initializeApp } from 'firebase/app';
-import { getStorage, ref } from 'firebase/storage';
-import { getFirestore, collection, where, query } from 'firebase/firestore';
-import { collectionData } from 'rxfire/firestore';
-import { getDownloadURL } from 'rxfire/storage';
-import { combineLatest } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
-
-const app = initializeApp({ /* config */ });
-const firestore = getFirestore(app);
-const storage = getStorage(app);
-const citiesRef = query(
-    collection(firestore, 'cities'),
-    where('state', '==', 'CO')
-);
-
-collectionData(citiesRef, { idField: 'id' })
-  .pipe(
-    switchMap(cities => {
-      return combineLatest(...cities.map(c => {
-        const ref = ref(storage, `/cities/${c.id}.png`);
-        return getDownloadURL(ref).pipe(map(imageURL => ({ imageURL, ...c })));
-      }));
-    })
-  )
-  .subscribe(cities => {
-    cities.forEach(c => console.log(c.imageURL));
-  });
+export interface FireSignalOptions<T> {
+  initialValue?: T;
+  injector?: Injector;
+  equal?: ValueEqualityFn<T>;
+  debugName?: string;
+}
 ```
 
-## Understanding RxFire imports
+If no `injector` is passed, helpers must be created inside an Angular injection
+context.
 
-RxFire is a complementary library to Firebase. It is not meant to wrap the entire Firebase SDK. RxFire's purpose is to simplify async streams from Firebase. You need to import the Firebase SDK and initialize an app before using RxFire.
+## Firestore Example
 
 ```ts
-import { initializeApp } from 'firebase/app';
-import { getStorage, ref } from 'firebase/storage';
-import { getDownloadURL } from 'rxfire/storage';
+import {collection, getFirestore, query, where} from 'firebase/firestore';
+import {collectionDataSignal} from '@zwiqler94/fire-signals/firestore';
 
-const app = initializeApp({ /* config */ });
-const storage = getStorage(app);
-const ref = ref(storage, 'data.json');
+interface City {
+  id: string;
+  name: string;
+  state: string;
+}
 
-// Now you can use RxFire!
-const url$ = getDownloadURL(ref);
+export class CitiesStore {
+  private readonly firestore = getFirestore();
+  private readonly citiesRef = query(
+      collection(this.firestore, 'cities'),
+      where('state', '==', 'CO'),
+  );
+
+  readonly cities = collectionDataSignal<City, 'id'>(
+      this.citiesRef,
+      {idField: 'id'},
+      {debugName: 'cities'},
+  );
+}
 ```
 
-RxFire contains multiple entry points for module imports. Each Firebase library is an entry point.
+```html
+@if (cities.loading()) {
+  <p>Loading...</p>
+} @else if (cities.status() === 'error') {
+  <p>Could not load cities.</p>
+} @else {
+  @for (city of cities.value() ?? []; track city.id) {
+    <p>{{ city.name }}</p>
+  }
+}
+```
+
+## Entry Points
 
 ```ts
-import { } from 'rxfire/firestore';
-import { } from 'rxfire/database';
-import { } from 'rxfire/storage';
-import { } from 'rxfire/auth';
-import { } from 'rxfire/functions';
-import { } from 'rxfire/performance';
-import { } from 'rxfire/remote-config';
+import {authStateSignal, userSignal, idTokenSignal} from '@zwiqler94/fire-signals/auth';
+import {objectValSignal, listValSignal} from '@zwiqler94/fire-signals/database';
+import {docDataSignal, collectionDataSignal} from '@zwiqler94/fire-signals/firestore';
+import {docDataSignal as liteDocDataSignal} from '@zwiqler94/fire-signals/firestore/lite';
+import {httpsCallableSignal} from '@zwiqler94/fire-signals/functions';
+import {getPerformanceSignal, traceSignal} from '@zwiqler94/fire-signals/performance';
+import {getStringSignal, getAllSignal} from '@zwiqler94/fire-signals/remote-config';
+import {getDownloadURLSignal, uploadBytesResumableSignal} from '@zwiqler94/fire-signals/storage';
 ```
 
-## Simple functions
-RxFire is a set of functions. Most functions create observables and from there you can use regular RxJS operators. Some functions are custom operators. But at the end of the day, it's all just functions. This is important for **tree shaking**. Any unused functions are stripped from your final build if you use a module bundler like Webpack or Rollup.
+## Product Coverage
 
-```ts
-import { initializeApp } from 'firebase/app';
-import { getStorage, ref } from 'firebase/storage';
-import { getDownloadURL, put /* not used! */ } 'rxfire/storage';
+- Auth: `authStateSignal`, `userSignal`, `idTokenSignal`
+- Firestore: document, collection, changes, audit trail, count, and data helpers
+- Firestore Lite: one-shot document, collection, count, and data helpers
+- Realtime Database: object, list, audit trail, and event helpers
+- Functions: `httpsCallableSignal`
+- Performance: `getPerformanceSignal` and signal trace helpers
+- Remote Config: initialized parameter getters
+- Storage: download URL, metadata, upload progress, upload string, and percentage helpers
 
-const app = initializeApp({ /* config */ });
-const storage = getStorage(app);
-const ref = ref(storage, 'data.json');
+## Attribution
 
-const url$ = getDownloadURL(ref);
-```
-
-## Documentation
-
-- [Firestore](docs/firestore.md)
-- [Authentication](docs/auth.md)
-- [Storage](docs/storage.md)
-- [Realtime Database](docs/database.md)
-- [Cloud Functions](docs/functions.md)
-
-## Examples
-
-[Examples](https://github.com/davideast/rxfire-samples): See this example repository for a list of ways to configure and use RxFire.
+FireSignals is a rearchitected fork of RxFire. RxFire and Firebase SDK work are
+Copyright Google LLC and licensed under Apache-2.0. FireSignals rearchitecture
+work is Copyright 2026 Zwiqler94 and licensed under Apache-2.0. See
+[NOTICE](NOTICE) and [LICENSE](LICENSE).

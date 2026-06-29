@@ -1,78 +1,28 @@
-# RxFire Auth
+<!-- markdownlint-disable MD013 -->
 
-## Auth State Observables
+# FireSignals Auth
 
-### `authState()`
-The `authState()` function creates an observable that emits authentication changes such as a logged out or logged in state.
+Import from `@zwiqler94/fire-signals/auth`.
 
-|                 |                                             |
-|-----------------|---------------------------------------------|
-| **function**    | `authState()`                               |
-| **params**      | `import('firebase/auth').Auth`              |
-| **import path** | `rxfire/auth`                               |
-| **return**      | `Observable<import('firebase/auth').User>`  |
+## APIs
 
-#### TypeScript Example
+| Function | Firebase source | Return |
+| --- | --- | --- |
+| `authStateSignal(auth, options?)` | `onAuthStateChanged` | `FireSignal<User \| null>` |
+| `userSignal(auth, options?)` | `onIdTokenChanged` | `FireSignal<User \| null>` |
+| `idTokenSignal(auth, options?)` | `onIdTokenChanged` + `getIdToken` | `FireSignal<string \| null>` |
+
+## Example
+
 ```ts
-import { authState } from 'rxfire/auth';
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { filter } from 'rxjs/operators';
+import {authStateSignal} from '@zwiqler94/fire-signals/auth';
+import {getAuth} from 'firebase/auth';
 
-// Set up Firebase
-const app = initializeApp({ /* config */ });
-const auth = getAuth();
-authState(auth).subscribe(user => {
-  console.log(user, ' will be null if logged out');
-});
-
-// Listen only for logged in state
-const loggedIn$ = authState(auth).pipe(filter(user => !!user));
-loggedIn$.subscribe(user => { console.log(user); });
+export class SessionStore {
+  readonly authState = authStateSignal(getAuth(), {
+    debugName: 'session.authState',
+  });
+}
 ```
 
-### `user()`
-The `user()` function creates an observable that emits authentication changes such as a logged out, logged in, and token refresh state. The token refresh emissions is what makes `user()` different from `authState()`.
-
-|                 |                                             |
-|-----------------|---------------------------------------------|
-| **function**    | `user()`                                    |
-| **params**      | `import('firebase/auth').Auth`              |
-| **import path** | `rxfire/auth`                               |
-| **return**      | `Observable<import('firebase/auth').User>`  |
-
-#### TypeScript Example
-```ts
-import { user } from 'rxfire/auth';
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { filter } from 'rxjs/operators';
-
-// Set up Firebase
-const app = initializeApp({ /* config */ });
-const auth = getAuth();
-user(auth).subscribe(u => { console.log(u); );
-```
-
-### `idToken()`
-The `idToken()` function creates an observable that emits the `idToken` refreshes. This is useful for keeping third party authentication in sync with Firebase Auth refreshes.
-
-|                 |                                          |
-|-----------------|------------------------------------------|
-| **function**    | `idToken()`                              |
-| **params**      | `import('firebase/auth').Auth`           |
-| **import path** | `rxfire/auth`                            |
-| **return**      | `Observable<string\|null>`               |
-
-#### TypeScript Example
-```ts
-import { idToken } from 'rxfire/auth';
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { filter } from 'rxjs/operators';
-
-// Set up Firebase
-const app = initializeApp({ /* config */ });
-const auth = getAuth();
-idToken(auth).subscribe(token => { console.log(token); );
-```
+`value()` is `undefined` until the first listener emission, then `User | null`.

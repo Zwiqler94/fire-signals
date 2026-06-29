@@ -1,0 +1,10 @@
+FireSignals
+Copyright 2026 Zwiqler94
+
+FireSignals is a rearchitected fork of RxFire. RxFire and Firebase SDK
+work are Copyright Google LLC and licensed under the Apache License,
+Version 2.0.
+
+This distribution preserves upstream Apache-2.0 licensing and copyright
+notices while identifying FireSignals-specific rearchitecture work by
+Zwiqler94.
