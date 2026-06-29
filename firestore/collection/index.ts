@@ -15,26 +15,11 @@
  * limitations under the License.
  */
 
-import {fromRef} from '../fromRef';
-import {
-  Observable,
-  MonoTypeOperatorFunction,
-  OperatorFunction,
-  pipe,
-  UnaryFunction,
-  from,
-} from 'rxjs';
-import {
-  map,
-  filter,
-  scan,
-  distinctUntilChanged,
-  startWith,
-  pairwise,
-} from 'rxjs/operators';
+import {fromRefSignal} from '../fromRef';
+import {createFireSignal, FireSignal, FireSignalOptions, mapFireSignal} from '../../core';
 import {snapToData} from '../document';
 import {DocumentChangeType, DocumentChange, Query, QueryDocumentSnapshot, QuerySnapshot, DocumentData} from '../interfaces';
-import {SnapshotOptions, getCountFromServer, refEqual} from 'firebase/firestore';
+import {SnapshotOptions, getCountFromServer, onSnapshot, refEqual} from 'firebase/firestore';
 import {CountSnapshot} from '../lite/interfaces';
 const ALL_EVENTS: DocumentChangeType[] = ['added', 'modified', 'removed'];
 
@@ -43,20 +28,17 @@ const ALL_EVENTS: DocumentChangeType[] = ['added', 'modified', 'removed'];
  * are specified by the event filter. If the document change type is not
  * in specified events array, it will not be emitted.
  */
-const filterEvents = <T>(
-  events?: DocumentChangeType[],
-): MonoTypeOperatorFunction<DocumentChange<T>[]> =>
-    filter((changes: DocumentChange<T>[]) => {
-      let hasChange = false;
-      for (let i = 0; i < changes.length; i++) {
-        const change = changes[i];
-        if (events && events.indexOf(change.type) >= 0) {
-          hasChange = true;
-          break;
-        }
-      }
-      return hasChange;
-    });
+function hasWantedEvents<T>(
+    changes: DocumentChange<T>[],
+    events: DocumentChangeType[],
+): boolean {
+  for (let i = 0; i < changes.length; i++) {
+    if (events.indexOf(changes[i].type) >= 0) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Splice arguments on top of a sliced array, to break top-level ===
@@ -149,12 +131,6 @@ function processDocumentChanges<T>(
  * Create an operator that allows you to compare the current emission with
  * the prior, even on first emission (where prior is undefined).
  */
-const windowwise = <T = unknown>() =>
-  pipe(
-      startWith(undefined),
-    pairwise() as OperatorFunction<T | undefined, [T | undefined, T]>,
-  );
-
 /**
  * Given two snapshots does their metadata match?
  * @param a
@@ -165,83 +141,99 @@ const metaDataEquals = <T, R extends QuerySnapshot<T> | QueryDocumentSnapshot<T>
   b: R,
 ) => JSON.stringify(a.metadata) === JSON.stringify(b.metadata);
 
-/**
- * Create an operator that filters out empty changes. We provide the
- * ability to filter on events, which means all changes can be filtered out.
- * This creates an empty array and would be incorrect to emit.
- */
-const filterEmptyUnlessFirst = <T = unknown>(): UnaryFunction<
-  Observable<T[]>,
-  Observable<T[]>
-> =>
-    pipe(
-        windowwise(),
-        filter(([prior, current]) => current.length > 0 || prior === undefined),
-        map(([, current]) => current),
-    );
+function listenCollectionChanges<T>(
+    query: Query<T>,
+    options: {
+      events?: DocumentChangeType[]
+    },
+    next: (changes: DocumentChange<T>[]) => void,
+    error: (error: unknown) => void,
+    complete: () => void,
+): () => void {
+  const events = options.events || ALL_EVENTS;
+  let priorSnapshot: QuerySnapshot<T> | undefined;
+  return onSnapshot(query, {includeMetadataChanges: true}, {
+    next: (currentSnapshot) => {
+      const docChanges = currentSnapshot.docChanges();
+      if (priorSnapshot && !metaDataEquals(priorSnapshot, currentSnapshot)) {
+        // The metadata changed, but docChanges() omits metadata-only events.
+        currentSnapshot.docs.forEach((currentDocSnapshot, currentIndex) => {
+          const currentDocChange = docChanges.find((c) =>
+            refEqual(c.doc.ref, currentDocSnapshot.ref),
+          );
+          if (currentDocChange) {
+            if (metaDataEquals(currentDocChange.doc, currentDocSnapshot)) {
+              return;
+            }
+          } else {
+            const priorDocSnapshot = priorSnapshot?.docs.find((d) =>
+              refEqual(d.ref, currentDocSnapshot.ref),
+            );
+            if (
+              priorDocSnapshot &&
+              metaDataEquals(priorDocSnapshot, currentDocSnapshot)
+            ) {
+              return;
+            }
+          }
+          docChanges.push({
+            oldIndex: currentIndex,
+            newIndex: currentIndex,
+            type: 'modified',
+            doc: currentDocSnapshot,
+          });
+        });
+      }
+
+      const isFirst = priorSnapshot === undefined;
+      priorSnapshot = currentSnapshot;
+      if ((docChanges.length === 0 && isFirst) || hasWantedEvents(docChanges, events)) {
+        next(docChanges.filter((change) => events.indexOf(change.type) > -1));
+      }
+    },
+    error,
+    complete,
+  });
+}
 
 /**
  * Return a stream of document changes on a query. These results are not in sort order but in
  * order of occurence.
  * @param query
  */
-export function collectionChanges<T=DocumentData>(
+export function collectionChangesSignal<T=DocumentData>(
     query: Query<T>,
     options: {
     events?: DocumentChangeType[]
   }={},
-): Observable<DocumentChange<T>[]> {
-  return fromRef(query, {includeMetadataChanges: true}).pipe(
-      windowwise(),
-      map(([priorSnapshot, currentSnapshot]) => {
-        const docChanges = currentSnapshot.docChanges();
-        if (priorSnapshot && !metaDataEquals(priorSnapshot, currentSnapshot)) {
-        // the metadata has changed, docChanges() doesn't return metadata events, so let's
-        // do it ourselves by scanning over all the docs and seeing if the metadata has changed
-        // since either this docChanges() emission or the prior snapshot
-          currentSnapshot.docs.forEach((currentDocSnapshot, currentIndex) => {
-            const currentDocChange = docChanges.find((c) =>
-              refEqual(c.doc.ref, currentDocSnapshot.ref),
-            );
-            if (currentDocChange) {
-            // if the doc is in the current changes and the metadata hasn't changed this doc
-              if (metaDataEquals(currentDocChange.doc, currentDocSnapshot)) {
-                return;
-              }
-            } else {
-            // if there is a prior doc and the metadata hasn't changed skip this doc
-              const priorDocSnapshot = priorSnapshot?.docs.find((d) =>
-                refEqual(d.ref, currentDocSnapshot.ref),
-              );
-              if (
-                priorDocSnapshot &&
-              metaDataEquals(priorDocSnapshot, currentDocSnapshot)
-              ) {
-                return;
-              }
-            }
-            docChanges.push({
-              oldIndex: currentIndex,
-              newIndex: currentIndex,
-              type: 'modified',
-              doc: currentDocSnapshot,
-            });
-          });
-        }
-        return docChanges;
-      }),
-      filterEvents(options.events || ALL_EVENTS),
-      filterEmptyUnlessFirst(),
-  );
+    signalOptions: FireSignalOptions<DocumentChange<T>[]> = {},
+): FireSignal<DocumentChange<T>[]> {
+  return createFireSignal((controller) => {
+    return listenCollectionChanges(
+        query,
+        options,
+        (changes) => controller.next(changes),
+        (error) => controller.error(error),
+        () => controller.complete(),
+    );
+  }, signalOptions);
 }
 
 /**
  * Return a stream of document snapshots on a query. These results are in sort order.
  * @param query
  */
-export function collection<T=DocumentData>(query: Query<T>): Observable<QueryDocumentSnapshot<T>[]> {
-  return fromRef(query, {includeMetadataChanges: true}).pipe(
-      map((changes) => changes.docs),
+export function collectionSignal<T=DocumentData>(
+    query: Query<T>,
+    options: FireSignalOptions<QueryDocumentSnapshot<T>[]> = {},
+): FireSignal<QueryDocumentSnapshot<T>[]> {
+  return mapFireSignal(
+      fromRefSignal(query, {includeMetadataChanges: true}, {
+        injector: options.injector,
+        debugName: options.debugName,
+      }),
+      (changes) => changes.docs,
+      options,
   );
 }
 
@@ -249,35 +241,52 @@ export function collection<T=DocumentData>(query: Query<T>): Observable<QueryDoc
  * Return a stream of document changes on a query. These results are in sort order.
  * @param query
  */
-export function sortedChanges<T=DocumentData>(
+export function sortedChangesSignal<T=DocumentData>(
     query: Query<T>,
     options: {
     events?: DocumentChangeType[]
   }={},
-): Observable<DocumentChange<T>[]> {
-  return collectionChanges(query, options).pipe(
-      scan(
-          (current: DocumentChange<T>[], changes: DocumentChange<T>[]) =>
-            processDocumentChanges(current, changes, options.events),
-          [],
-      ),
-      distinctUntilChanged(),
-  );
+    signalOptions: FireSignalOptions<DocumentChange<T>[]> = {},
+): FireSignal<DocumentChange<T>[]> {
+  return createFireSignal((controller) => {
+    let current: DocumentChange<T>[] = [];
+    return listenCollectionChanges(
+        query,
+        options,
+        (changes) => {
+          current = processDocumentChanges(current, changes, options.events);
+          controller.next(current);
+        },
+        (error) => controller.error(error),
+        () => controller.complete(),
+    );
+  }, signalOptions);
 }
 
 /**
  * Create a stream of changes as they occur it time. This method is similar
  * to docChanges() but it collects each event in an array over time.
  */
-export function auditTrail<T=DocumentData>(
+export function auditTrailSignal<T=DocumentData>(
     query: Query<T>,
     options: {
     events?: DocumentChangeType[]
   }={},
-): Observable<DocumentChange<T>[]> {
-  return collectionChanges(query, options).pipe(
-      scan((current, action) => [...current, ...action], [] as DocumentChange<T>[]),
-  );
+    signalOptions: FireSignalOptions<DocumentChange<T>[]> = {},
+): FireSignal<DocumentChange<T>[]> {
+  return createFireSignal((controller) => {
+    let current: DocumentChange<T>[] = [];
+    return listenCollectionChanges(
+        query,
+        options,
+        (changes) => {
+          current = [...current, ...changes];
+          controller.next(current);
+        },
+        (error) => controller.error(error),
+        () => controller.complete(),
+    );
+  }, signalOptions);
 }
 
 /**
@@ -285,23 +294,57 @@ export function auditTrail<T=DocumentData>(
  * @param query
  * @param options
  */
-export function collectionData<T=DocumentData, U extends string=never>(
+export function collectionDataSignal<T=DocumentData, U extends string=never>(
     query: Query<T>,
     options: {
   idField?: ((U | keyof T) & keyof NonNullable<T>),
   } & SnapshotOptions={},
-): Observable<((T & { [T in U]: string; }) | NonNullable<T>)[]> {
-  return collection(query).pipe(
-      map((arr) => {
-        return arr.map((snap) => snapToData(snap, options)!);
+    signalOptions: FireSignalOptions<((T & { [T in U]: string; }) | NonNullable<T>)[]> = {},
+): FireSignal<((T & { [T in U]: string; }) | NonNullable<T>)[]> {
+  return mapFireSignal(
+      collectionSignal(query, {
+        injector: signalOptions.injector,
+        debugName: signalOptions.debugName,
       }),
+      (arr) => arr.map((snap) => snapToData(snap, options)!),
+      signalOptions,
   );
 }
 
-export function collectionCountSnap(query: Query<unknown>): Observable<CountSnapshot> {
-  return from(getCountFromServer(query));
+export function collectionCountSnapSignal(
+    query: Query<unknown>,
+    options: FireSignalOptions<CountSnapshot> = {},
+): FireSignal<CountSnapshot> {
+  return createFireSignal((controller) => {
+    let active = true;
+    getCountFromServer(query).then(
+        (snapshot) => {
+          if (active) {
+            controller.next(snapshot);
+          }
+        },
+        (error) => {
+          if (active) {
+            controller.error(error);
+          }
+        },
+    );
+    return () => {
+      active = false;
+    };
+  }, options);
 }
 
-export function collectionCount(query: Query<unknown>): Observable<number> {
-  return collectionCountSnap(query).pipe(map((snap) => snap.data().count));
+export function collectionCountSignal(
+    query: Query<unknown>,
+    options: FireSignalOptions<number> = {},
+): FireSignal<number> {
+  return mapFireSignal(
+      collectionCountSnapSignal(query, {
+        injector: options.injector,
+        debugName: options.debugName,
+      }),
+      (snap) => snap.data().count,
+      options,
+  );
 }

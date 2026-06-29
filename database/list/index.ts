@@ -16,50 +16,96 @@
  */
 
 import {QueryChange, ListenEvent, Query} from '../interfaces';
-import {Observable, of, merge, from} from 'rxjs';
 import {validateEventsArray} from '../utils';
-import {fromRef} from '../fromRef';
-import {switchMap, scan, distinctUntilChanged, map} from 'rxjs/operators';
 import {changeToData} from '../object';
 import {get as databaseGet} from 'firebase/database';
+import {createFireSignal, FireSignal, FireSignalOptions, mapFireSignal} from '../../core';
+import {fromRefSignal} from '../fromRef';
+import {effect} from '@angular/core';
 
-export function stateChanges(
+export function stateChangesSignal(
     query: Query,
     options: {
     events?: ListenEvent[]
   } = {},
-): Observable<QueryChange> {
+    signalOptions: FireSignalOptions<QueryChange> = {},
+): FireSignal<QueryChange> {
   const events = validateEventsArray(options.events);
-  const childEvent$ = events.map((event) => fromRef(query, event));
-  return merge(...childEvent$);
-}
-
-function get(query: Query): Observable<QueryChange> {
-  return from(databaseGet(query)).pipe(
-      map((snapshot) => {
-        const event = ListenEvent.value;
-        return {snapshot, prevKey: null, event};
+  return createFireSignal((controller) => {
+    const children = events.map((event) =>
+      fromRefSignal(query, event, {
+        injector: signalOptions.injector,
+        debugName: signalOptions.debugName,
       }),
-  );
+    );
+    const cleanups = children.map((child) => child.destroy);
+    const stopEffects = children.map((child) => {
+      return effect(() => {
+        if (child.status() === 'error') {
+          controller.error(child.error());
+          return;
+        }
+        if (child.hasValue()) {
+          controller.next(child.value() as QueryChange);
+        }
+      }, {injector: signalOptions.injector});
+    });
+    return () => {
+      stopEffects.forEach((stopEffect) => stopEffect.destroy());
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, signalOptions);
 }
 
-export function list(
+export function listSignal(
     query: Query,
     options: {
     events?: ListenEvent[]
   } = {},
-): Observable<QueryChange[]> {
+    signalOptions: FireSignalOptions<QueryChange[]> = {},
+): FireSignal<QueryChange[]> {
   const events = validateEventsArray(options.events);
-  return get(query).pipe(
-      switchMap((change) => {
-        const childEvent$ = [of(change)];
-        events.forEach((event) => {
-          childEvent$.push(fromRef(query, event));
-        });
-        return merge(...childEvent$).pipe(scan(buildView, []));
-      }),
-      distinctUntilChanged(),
-  );
+  return createFireSignal((controller) => {
+    let current: QueryChange[] = [];
+    const cleanups: Array<() => void> = [];
+    let active = true;
+
+    databaseGet(query).then(
+        (snapshot) => {
+          if (!active || controller.destroyed) {
+            return;
+          }
+          current = buildView(current, {snapshot, prevKey: null, event: ListenEvent.value});
+          controller.next(current);
+          events.forEach((event) => {
+            const child = fromRefSignal(query, event, {
+              injector: signalOptions.injector,
+              debugName: signalOptions.debugName,
+            });
+            const stopEffect = effect(() => {
+              if (child.status() === 'error') {
+                controller.error(child.error());
+                return;
+              }
+              if (child.hasValue()) {
+                current = buildView(current, child.value() as QueryChange);
+                controller.next(current);
+              }
+            }, {injector: signalOptions.injector});
+            cleanups.push(() => {
+              stopEffect.destroy();
+              child.destroy();
+            });
+          });
+        },
+        (error) => controller.error(error),
+    );
+
+    return () => {
+      active = false;
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, signalOptions);
 }
 
 /**
@@ -67,16 +113,20 @@ export function list(
  * @param query object ref or query
  * @param keyField map the object key to a specific field
  */
-export function listVal<T>(
+export function listValSignal<T>(
     query: Query,
     options: {
     keyField?: string,
   } = {},
-): Observable<T[]> {
-  return list(query).pipe(
-      map((arr) => {
-        return arr.map((change) => changeToData(change, options) as T);
+    signalOptions: FireSignalOptions<T[]> = {},
+): FireSignal<T[]> {
+  return mapFireSignal(
+      listSignal(query, undefined, {
+        injector: signalOptions.injector,
+        debugName: signalOptions.debugName,
       }),
+      (arr) => arr.map((change) => changeToData(change, options) as T),
+      signalOptions,
   );
 }
 

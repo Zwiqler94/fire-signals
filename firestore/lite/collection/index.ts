@@ -15,19 +15,26 @@
  * limitations under the License.
  */
 
-import {Observable, from} from 'rxjs';
-import {map} from 'rxjs/operators';
 import {snapToData} from '../document';
 import {Query, QueryDocumentSnapshot, DocumentData, CountSnapshot} from '../interfaces';
 import {getDocs, getCount} from 'firebase/firestore/lite';
+import {FireSignal, FireSignalOptions, fromPromiseSignal, mapFireSignal} from '../../../core';
 
 /**
  * Return a stream of document snapshots on a query. These results are in sort order.
  * @param query
  */
-export function collection<T=DocumentData>(query: Query<T>): Observable<QueryDocumentSnapshot<T>[]> {
-  return from(getDocs<T, DocumentData>(query)).pipe(
-      map((changes) => changes.docs),
+export function collectionSignal<T=DocumentData>(
+    query: Query<T>,
+    options: FireSignalOptions<QueryDocumentSnapshot<T>[]> = {},
+): FireSignal<QueryDocumentSnapshot<T>[]> {
+  return mapFireSignal(
+      fromPromiseSignal(() => getDocs<T, DocumentData>(query), {
+        injector: options.injector,
+        debugName: options.debugName,
+      }),
+      (changes) => changes.docs,
+      options,
   );
 }
 
@@ -35,23 +42,40 @@ export function collection<T=DocumentData>(query: Query<T>): Observable<QueryDoc
  * Returns a stream of documents mapped to their data payload, and optionally the document ID
  * @param query
  */
-export function collectionData<T=DocumentData>(
+export function collectionDataSignal<T=DocumentData>(
     query: Query<T>,
     options: {
     idField?: string
   }={},
-): Observable<T[]> {
-  return collection(query).pipe(
-      map((arr) => {
-        return arr.map((snap) => snapToData(snap, options) as T);
+    signalOptions: FireSignalOptions<T[]> = {},
+): FireSignal<T[]> {
+  return mapFireSignal(
+      collectionSignal(query, {
+        injector: signalOptions.injector,
+        debugName: signalOptions.debugName,
       }),
+      (arr) => arr.map((snap) => snapToData(snap, options) as T),
+      signalOptions,
   );
 }
 
-export function collectionCountSnap(query: Query<unknown>): Observable<CountSnapshot> {
-  return from(getCount(query));
+export function collectionCountSnapSignal(
+    query: Query<unknown>,
+    options: FireSignalOptions<CountSnapshot> = {},
+): FireSignal<CountSnapshot> {
+  return fromPromiseSignal(() => getCount(query), options);
 }
 
-export function collectionCount(query: Query<unknown>): Observable<number> {
-  return collectionCountSnap(query).pipe(map((snap) => snap.data().count));
+export function collectionCountSignal(
+    query: Query<unknown>,
+    options: FireSignalOptions<number> = {},
+): FireSignal<number> {
+  return mapFireSignal(
+      collectionCountSnapSignal(query, {
+        injector: options.injector,
+        debugName: options.debugName,
+      }),
+      (snap) => snap.data().count,
+      options,
+  );
 }

@@ -1,5 +1,5 @@
 {
-  "name": "rxfire/auth",
+  "name": "@zwiqler94/fire-signals/auth",
   "browser": "../dist/auth/index.esm.js",
   "main": "../dist/auth/index.cjs.js",
   "module": "../dist/auth/index.esm.js",

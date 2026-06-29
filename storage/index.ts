@@ -4,116 +4,114 @@ import {
   uploadBytesResumable as _uploadBytesResumable,
   uploadString as _uploadString,
 } from 'firebase/storage';
-import {Observable, from} from 'rxjs';
-import {map, shareReplay} from 'rxjs/operators';
+import {createFireSignal, FireSignal, FireSignalOptions, fromPromiseSignal, mapFireSignal} from '../core';
 
-import type {UploadTaskSnapshot, StorageReference, UploadMetadata, StringFormat, UploadTask, UploadResult} from 'firebase/storage';
+import type {
+  FullMetadata,
+  UploadTaskSnapshot,
+  StorageReference,
+  UploadMetadata,
+  StringFormat,
+  UploadTask,
+  UploadResult,
+} from 'firebase/storage';
 
-export function fromTask(task: UploadTask): Observable<UploadTaskSnapshot> {
-  return new Observable<UploadTaskSnapshot>((subscriber) => {
-    let lastSnapshot: UploadTaskSnapshot | null = null;
-    let complete = false;
-    let hasError = false;
-    let error: any = null;
-
-    const emit = (snapshot: UploadTaskSnapshot) => {
-      lastSnapshot = snapshot;
-      schedule();
-    };
-
-    let id: ReturnType<typeof setTimeout> | null = null;
-
-    /**
-     * Schedules an async event to check and emit
-     * the most recent snapshot, and complete or error
-     * if necessary.
-     */
-    const schedule = () => {
-      if (!id) {
-        id = setTimeout(() => {
-          id = null;
-          if (lastSnapshot) subscriber.next(lastSnapshot);
-          if (complete) subscriber.complete();
-          if (hasError) subscriber.error(error);
-        });
+function taskToSignal(
+    task: UploadTask,
+    options: FireSignalOptions<UploadTaskSnapshot> = {},
+    cancelOnDestroy = false,
+): FireSignal<UploadTaskSnapshot> {
+  return createFireSignal((controller) => {
+    let done = false;
+    controller.next(task.snapshot);
+    const unsubscribe = task.on(
+        'state_changed',
+        (snapshot) => controller.next(snapshot),
+        (error) => {
+          done = true;
+          controller.error(error);
+        },
+    );
+    task.then(
+        (snapshot) => {
+          done = true;
+          controller.next(snapshot);
+          controller.complete();
+        },
+        (error) => {
+          done = true;
+          controller.error(error);
+        },
+    );
+    return () => {
+      unsubscribe();
+      if (cancelOnDestroy && !done) {
+        task.cancel();
       }
     };
-
-    subscriber.add(() => {
-      // If we have any emissions checks scheduled, cancel them.
-      if (id) clearTimeout(id);
-    });
-
-    // Emit the initial snapshot
-    emit(task.snapshot);
-
-    // Take each update and schedule them to be emitted (see `emit`)
-    subscriber.add(task.on('state_changed', emit) as () => void);
-
-    // task is a promise, so we can convert that to an observable,
-    // this is done for the ergonomics around making sure we don't
-    // try to push errors or completions through closed subscribers
-    subscriber.add(
-        from(task as unknown as Promise<UploadTaskSnapshot>).subscribe({
-          next: emit,
-          error: (err) => {
-            hasError = true;
-            error = err;
-            schedule();
-          },
-          complete: () => {
-            complete = true;
-            schedule();
-          },
-        }),
-    );
-  });
+  }, options);
 }
 
-export function getDownloadURL(ref: StorageReference): Observable<string> {
-  return from(_getDownloadURL(ref));
+export function fromTaskSignal(
+    task: UploadTask,
+    options: FireSignalOptions<UploadTaskSnapshot> = {},
+): FireSignal<UploadTaskSnapshot> {
+  return taskToSignal(task, options);
 }
 
-// TODO: fix storage typing in firebase, then apply the same fix here
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getMetadata(ref: StorageReference): Observable<any> {
-  return from(_getMetadata(ref));
+export function getDownloadURLSignal(
+    ref: StorageReference,
+    options: FireSignalOptions<string> = {},
+): FireSignal<string> {
+  return fromPromiseSignal(() => _getDownloadURL(ref), options);
 }
 
-// MARK: Breaking change (renaming put to uploadBytesResumable)
-export function uploadBytesResumable(
+export function getMetadataSignal(
+    ref: StorageReference,
+    options: FireSignalOptions<FullMetadata> = {},
+): FireSignal<FullMetadata> {
+  return fromPromiseSignal(() => _getMetadata(ref), options);
+}
+
+export function uploadBytesResumableSignal(
     ref: StorageReference,
     data: Blob | Uint8Array | ArrayBuffer,
     metadata?: UploadMetadata,
-): Observable<UploadTaskSnapshot> {
-  return new Observable<UploadTaskSnapshot>((subscriber) => {
-    const task = _uploadBytesResumable(ref, data, metadata);
-    const subscription = fromTask(task).subscribe(subscriber);
-    return function unsubscribe() {
-      subscription.unsubscribe();
-      task.cancel();
-    };
-  }).pipe(shareReplay({bufferSize: 1, refCount: true}));
+    options: FireSignalOptions<UploadTaskSnapshot> = {},
+): FireSignal<UploadTaskSnapshot> {
+  const task = _uploadBytesResumable(ref, data, metadata);
+  return taskToSignal(task, options, true);
 }
 
-// MARK: Breaking change (renaming put to uploadString)
-export function uploadString(
+export function uploadStringSignal(
     ref: StorageReference,
     data: string,
     format?: StringFormat,
     metadata?: UploadMetadata,
-): Observable<UploadResult> {
-  return from(_uploadString(ref, data, format, metadata));
+    options: FireSignalOptions<UploadResult> = {},
+): FireSignal<UploadResult> {
+  return fromPromiseSignal(() => _uploadString(ref, data, format, metadata), options);
 }
 
-export function percentage(task: UploadTask): Observable<{
+export function percentageSignal(
+    task: UploadTask,
+    options: FireSignalOptions<{
+      progress: number;
+      snapshot: UploadTaskSnapshot;
+    }> = {},
+): FireSignal<{
   progress: number;
   snapshot: UploadTaskSnapshot;
 }> {
-  return fromTask(task).pipe(
-      map((snapshot) => ({
+  return mapFireSignal(
+      fromTaskSignal(task, {
+        injector: options.injector,
+        debugName: options.debugName,
+      }),
+      (snapshot) => ({
         progress: (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
         snapshot,
-      })),
+      }),
+      options,
   );
 }

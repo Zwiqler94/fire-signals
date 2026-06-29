@@ -1,156 +1,161 @@
-import {EMPTY, from, Observable, Subscription} from 'rxjs';
-import {tap} from 'rxjs/operators';
+import {effect} from '@angular/core';
+import {createFireSignal, FireSignal, FireSignalOptions, fromPromiseSignal} from '../core';
 
 type FirebaseApp = import('firebase/app').FirebaseApp;
+type FirebasePerformance = import('firebase/performance').FirebasePerformance;
+
+interface TraceSignalOptions<T> extends FireSignalOptions<T> {
+  orComplete?: boolean;
+}
 
 /**
- * Lazy loads Firebase Performance monitoring and returns the instance as
- * an observable
+ * Lazy loads Firebase Performance monitoring and returns the instance as a FireSignal.
  * @param app
- * @returns Observable<FirebasePerformance>
+ * @returns FireSignal<FirebasePerformance>
  */
-export const getPerformance$ = (app: FirebaseApp) => from(
-    import('firebase/performance').then((module) => module.getPerformance(app)),
+export const getPerformanceSignal = (
+    app: FirebaseApp,
+    options: FireSignalOptions<FirebasePerformance> = {},
+) => fromPromiseSignal(
+    () => import('firebase/performance').then((module) => module.getPerformance(app)),
+    options,
 );
 
-/**
- * Creates an observable that begins a trace with a given id. The trace is ended
- * when the observable unsubscribes. The measurement is also logged as a performance
- * entry.
- * @param traceId
- * @returns Observable<void>
- */
-const trace$ = (traceId: string) => {
-  if (typeof window !== 'undefined' && window.performance) {
-    const entries = window.performance.getEntriesByName(traceId, 'measure') || [];
-    const startMarkName = `_${traceId}Start[${entries.length}]`;
-    const endMarkName = `_${traceId}End[${entries.length}]`;
-    return new Observable<void>((emitter) => {
-      window.performance.mark(startMarkName);
-      emitter.next();
-      return {
-        unsubscribe: () => {
-          window.performance.mark(endMarkName);
-          window.performance.measure(traceId, startMarkName, endMarkName);
-        },
-      };
-    });
-  } else {
-    return EMPTY;
+function startTrace(traceId: string): () => void {
+  if (typeof window === 'undefined' || !window.performance) {
+    return () => undefined;
   }
+  const entries = window.performance.getEntriesByName(traceId, 'measure') || [];
+  const startMarkName = `_${traceId}Start[${entries.length}]`;
+  const endMarkName = `_${traceId}End[${entries.length}]`;
+  let ended = false;
+  window.performance.mark(startMarkName);
+  return () => {
+    if (ended) {
+      return;
+    }
+    ended = true;
+    window.performance.mark(endMarkName);
+    window.performance.measure(traceId, startMarkName, endMarkName);
+  };
+}
+
+function mirrorTraceSignal<T>(
+    source: FireSignal<T>,
+    options: FireSignalOptions<T>,
+    handleValue: (value: T) => void,
+    handleReady: () => void = () => undefined,
+    handleCleanup: () => void = () => undefined,
+): FireSignal<T> {
+  return createFireSignal<T>((controller) => {
+    const stopEffect = effect(() => {
+      if (source.status() === 'error') {
+        controller.error(source.error());
+        return;
+      }
+      if (source.hasValue()) {
+        const value = source.value() as T;
+        controller.next(value);
+        handleValue(value);
+      }
+      if (!source.loading()) {
+        handleReady();
+      }
+    }, {injector: options.injector});
+
+    return () => {
+      handleCleanup();
+      stopEffect.destroy();
+      source.destroy();
+    };
+  }, options);
+}
+
+/**
+ * Begins a trace and ends it when the source signal first has a value.
+ */
+export const traceSignal = <T = unknown>(
+    name: string,
+    source: FireSignal<T>,
+    options: FireSignalOptions<T> = {},
+): FireSignal<T> => {
+  const endTrace = startTrace(name);
+  return mirrorTraceSignal(source, options, () => endTrace(), undefined, endTrace);
 };
 
 /**
- * Creates a function that creates an observable that begins a trace with a given id. The trace is ended
- * when the observable unsubscribes. The measurement is also logged as a performance
- * entry.
- * @param name
- * @returns (source$: Observable<T>) => Observable<T>
+ * Begins a trace and ends it when the test resolves to true.
  */
-export const trace = <T = any>(name: string) => (source$: Observable<T>) => new Observable<T>((subscriber) => {
-  const traceSubscription = trace$(name).subscribe();
-  return source$.pipe(
-      tap(
-          () => traceSubscription.unsubscribe(),
-          () => {
-          },
-          () => traceSubscription.unsubscribe(),
-      ),
-  ).subscribe(subscriber);
-});
+export const traceUntilSignal = <T = unknown>(
+    name: string,
+    source: FireSignal<T>,
+    test: (value: T) => boolean,
+    options: TraceSignalOptions<T> = {},
+): FireSignal<T> => {
+  const endTrace = startTrace(name);
+  return mirrorTraceSignal(
+      source,
+      options,
+      (value) => {
+        if (test(value)) {
+          endTrace();
+        }
+      },
+      () => {
+        if (options.orComplete) {
+          endTrace();
+        }
+      },
+      endTrace,
+  );
+};
 
 /**
- * Creates a function that creates an observable that begins a trace with a given name. The trace runs until
- * a condition resolves to true and then the observable unsubscribes and ends the trace.
- * @param name
- * @param test
- * @param options
- * @returns (source$: Observable<T>) => Observable<T>
+ * Begins a trace while the test resolves to true, and ends it once the test fails.
  */
-export const traceUntil = <T = any>(
-  name: string,
-  test: (a: T) => boolean,
-  options?: { orComplete?: boolean },
-) => (source$: Observable<T>) => new Observable<T>((subscriber) => {
-  const traceSubscription = trace$(name).subscribe();
-  return source$.pipe(
-      tap(
-          (a) => test(a) && traceSubscription.unsubscribe(),
-          () => {
-          },
-          () => options && options.orComplete && traceSubscription.unsubscribe(),
-      ),
-  ).subscribe(subscriber);
-});
+export const traceWhileSignal = <T = unknown>(
+    name: string,
+    source: FireSignal<T>,
+    test: (value: T) => boolean,
+    options: TraceSignalOptions<T> = {},
+): FireSignal<T> => {
+  let endTrace: (() => void) | undefined;
+  const stopTrace = () => {
+    endTrace?.();
+    endTrace = undefined;
+  };
+  return mirrorTraceSignal(
+      source,
+      options,
+      (value) => {
+        if (test(value)) {
+          endTrace = endTrace ?? startTrace(name);
+        } else {
+          stopTrace();
+        }
+      },
+      () => {
+        if (options.orComplete) {
+          stopTrace();
+        }
+      },
+      stopTrace,
+  );
+};
 
 /**
- * Creates a function that creates an observable that begins a trace with a given name. The trace runs while
- * a condition resolves to true. Once the condition fails the observable unsubscribes
- * and ends the trace.
- * @param name
- * @param test
- * @param options
- * @returns (source$: Observable<T>) => Observable<T>
+ * Begins a trace and ends it when the source is no longer loading.
  */
-export const traceWhile = <T = any>(
-  name: string,
-  test: (a: T) => boolean,
-  options?: { orComplete?: boolean },
-) => (source$: Observable<T>) => new Observable<T>((subscriber) => {
-  let traceSubscription: Subscription | undefined;
-  return source$.pipe(
-      tap(
-          (a) => {
-            if (test(a)) {
-              traceSubscription = traceSubscription || trace$(name).subscribe();
-            } else {
-              if (traceSubscription) {
-                traceSubscription.unsubscribe();
-              }
-              traceSubscription = undefined;
-            }
-          },
-          () => {
-          },
-          () => options && options.orComplete && traceSubscription && traceSubscription.unsubscribe(),
-      ),
-  ).subscribe(subscriber);
-});
+export const traceUntilCompleteSignal = <T = unknown>(
+    name: string,
+    source: FireSignal<T>,
+    options: FireSignalOptions<T> = {},
+): FireSignal<T> => {
+  const endTrace = startTrace(name);
+  return mirrorTraceSignal(source, options, () => undefined, () => endTrace(), endTrace);
+};
 
 /**
- * Creates a function that creates an observable that begins a trace with a given name. The trace runs until the
- * observable fully completes.
- * @param name
- * @returns (source$: Observable<T>) => Observable<T>
+ * Begins a trace and ends it when the source signal first has a value.
  */
-export const traceUntilComplete = <T = any>(name: string) => (source$: Observable<T>) => new Observable<T>((subscriber) => {
-  const traceSubscription = trace$(name).subscribe();
-  return source$.pipe(
-      tap(
-          () => {
-          },
-          () => {
-          },
-          () => traceSubscription.unsubscribe(),
-      ),
-  ).subscribe(subscriber);
-});
-
-/**
- * Creates a function that creates an observable that begins a trace with a given name.
- * The trace runs until the first value emits from the provided observable.
- * @param name
- * @returns (source$: Observable<T>) => Observable<T>
- */
-export const traceUntilFirst = <T = any>(name: string) => (source$: Observable<T>) => new Observable<T>((subscriber) => {
-  const traceSubscription = trace$(name).subscribe();
-  return source$.pipe(
-      tap(
-          () => traceSubscription.unsubscribe(),
-          () => {
-          },
-          () => {
-          },
-      ),
-  ).subscribe(subscriber);
-});
+export const traceUntilFirstSignal = traceSignal;

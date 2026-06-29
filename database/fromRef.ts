@@ -15,37 +15,31 @@
  * limitations under the License.
  */
 
-import {Observable} from 'rxjs';
-import {delay} from 'rxjs/operators';
+import {FireSignal, FireSignalOptions, createFireSignal} from '../core';
 import {ListenEvent, QueryChange, ListenerMethods} from './interfaces';
-import {off} from 'firebase/database';
 
 /**
- * Create an observable from a Database Reference or Database Query.
+ * Create a FireSignal from a Database Reference or Database Query.
  * @param ref Database Reference
  * @param event Listen event type ('value', 'added', 'changed', 'removed', 'moved')
  */
-export function fromRef(
+export function fromRefSignal(
     ref: import('firebase/database').Query,
     event: ListenEvent,
-): Observable<QueryChange> {
-  return new Observable<QueryChange>((subscriber) => {
-    const fn = ListenerMethods[event](
+    options: FireSignalOptions<QueryChange> = {},
+): FireSignal<QueryChange> {
+  return createFireSignal<QueryChange>((controller) => {
+    const unsubscribe = ListenerMethods[event](
         ref,
         (snapshot, prevKey) => {
-          subscriber.next({snapshot, prevKey, event});
+          queueMicrotask(() => {
+            if (!controller.destroyed) {
+              controller.next({snapshot, prevKey, event});
+            }
+          });
         },
-        subscriber.error.bind(subscriber),
+        (error) => controller.error(error),
     );
-    return {
-      unsubscribe() {
-        off(ref, event, fn);
-      },
-    };
-  }).pipe(
-      // Ensures subscribe on observable is async. This handles
-      // a quirk in the SDK where on/once callbacks can happen
-      // synchronously.
-      delay(0),
-  );
+    return unsubscribe;
+  }, options);
 }

@@ -19,51 +19,82 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import {Auth} from 'firebase/auth';
 import {onAuthStateChanged, onIdTokenChanged, getIdToken} from 'firebase/auth';
-import {Observable, from, of} from 'rxjs';
-import {switchMap} from 'rxjs/operators';
+import {createFireSignal, FireSignal, FireSignalOptions} from '../core';
 
 type User = import('firebase/auth').User;
 
 /**
- * Create an observable of authentication state. The observer is only
+ * Create a FireSignal of authentication state. The listener is only
  * triggered on sign-in or sign-out.
  * @param auth firebase.auth.Auth
  */
-export function authState(auth: Auth): Observable<User|null> {
-  return new Observable((subscriber) => {
-    const unsubscribe = onAuthStateChanged(
+export function authStateSignal(
+    auth: Auth,
+    options: FireSignalOptions<User | null> = {},
+): FireSignal<User | null> {
+  return createFireSignal((controller) => {
+    return onAuthStateChanged(
         auth,
-        subscriber.next.bind(subscriber),
-        subscriber.error.bind(subscriber),
-        subscriber.complete.bind(subscriber),
+        (user) => controller.next(user),
+        (error) => controller.error(error),
+        () => controller.complete(),
     );
-    return {unsubscribe};
-  });
+  }, options);
 }
 
 /**
- * Create an observable of user state. The observer is triggered for sign-in,
+ * Create a FireSignal of user state. The listener is triggered for sign-in,
  * sign-out, and token refresh events
  * @param auth firebase.auth.Auth
  */
-export function user(auth: Auth): Observable<User|null> {
-  return new Observable((subscriber) => {
-    const unsubscribe = onIdTokenChanged(auth,
-        subscriber.next.bind(subscriber),
-        subscriber.error.bind(subscriber),
-        subscriber.complete.bind(subscriber),
+export function userSignal(
+    auth: Auth,
+    options: FireSignalOptions<User | null> = {},
+): FireSignal<User | null> {
+  return createFireSignal((controller) => {
+    return onIdTokenChanged(auth,
+        (user) => controller.next(user),
+        (error) => controller.error(error),
+        () => controller.complete(),
     );
-    return {unsubscribe};
-  });
+  }, options);
 }
 
 /**
- * Create an observable of idToken state. The observer is triggered for sign-in,
+ * Create a FireSignal of idToken state. The listener is triggered for sign-in,
  * sign-out, and token refresh events
  * @param auth firebase.auth.Auth
  */
-export function idToken(auth: Auth): Observable<string | null> {
-  return user(auth).pipe(
-      switchMap((user) => (user ? from(getIdToken(user)) : of(null))),
-  );
+export function idTokenSignal(
+    auth: Auth,
+    options: FireSignalOptions<string | null> = {},
+): FireSignal<string | null> {
+  return createFireSignal((controller) => {
+    let sequence = 0;
+    return onIdTokenChanged(auth,
+        (user) => {
+          sequence++;
+          const current = sequence;
+          if (!user) {
+            controller.next(null);
+            return;
+          }
+          controller.loading();
+          getIdToken(user).then(
+              (token) => {
+                if (current === sequence) {
+                  controller.next(token);
+                }
+              },
+              (error) => {
+                if (current === sequence) {
+                  controller.error(error);
+                }
+              },
+          );
+        },
+        (error) => controller.error(error),
+        () => controller.complete(),
+    );
+  }, options);
 }

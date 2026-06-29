@@ -1,5 +1,5 @@
 {
-  "name": "rxfire/firestore/lite",
+  "name": "@zwiqler94/fire-signals/firestore/lite",
   "browser": "../../dist/firestore/lite/index.esm.js",
   "main": "../../dist/firestore/lite/index.cjs.js",
   "module": "../../dist/firestore/lite/index.esm.js",

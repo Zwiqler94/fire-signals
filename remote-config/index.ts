@@ -1,4 +1,4 @@
-import {Observable} from 'rxjs';
+import {FireSignal, FireSignalOptions, fromPromiseSignal} from '../core';
 
 type RemoteConfig = import('firebase/remote-config').RemoteConfig;
 type RemoteConfigValue = import('firebase/remote-config').Value;
@@ -22,39 +22,55 @@ interface ParameterSettings<T> {
   getter: (remoteConfig: RemoteConfig, key: string) => T;
 }
 
-function parameter$<T>({remoteConfig, key, getter}: ParameterSettings<T>): Observable<T> {
-  return new Observable((subscriber) => {
-    ensureInitialized(remoteConfig).then(() => {
-      // 'this' for the getter loses context in the next()
-      // call, so it needs to be bound.
-      const boundGetter = getter.bind(remoteConfig);
-      subscriber.next(boundGetter(remoteConfig, key));
-    });
-  });
+function parameterSignal<T>(
+    {remoteConfig, key, getter}: ParameterSettings<T>,
+    options: FireSignalOptions<T> = {},
+): FireSignal<T> {
+  return fromPromiseSignal(async () => {
+    await ensureInitialized(remoteConfig);
+    return getter(remoteConfig, key);
+  }, options);
 }
 
-export function getValue(remoteConfig: RemoteConfig, key: string) {
-  const getter = baseGetValue;
-  return parameter$({remoteConfig, key, getter});
+export function getValueSignal(
+    remoteConfig: RemoteConfig,
+    key: string,
+    options: FireSignalOptions<RemoteConfigValue> = {},
+): FireSignal<RemoteConfigValue> {
+  return parameterSignal({remoteConfig, key, getter: baseGetValue}, options);
 }
 
-export function getString(remoteConfig: RemoteConfig, key: string) {
-  const getter = baseGetString;
-  return parameter$<string>({remoteConfig, key, getter});
+export function getStringSignal(
+    remoteConfig: RemoteConfig,
+    key: string,
+    options: FireSignalOptions<string> = {},
+): FireSignal<string> {
+  return parameterSignal({remoteConfig, key, getter: baseGetString}, options);
 }
 
-export function getNumber(remoteConfig: RemoteConfig, key: string) {
-  const getter = baseGetNumber;
-  return parameter$<number>({remoteConfig, key, getter});
+export function getNumberSignal(
+    remoteConfig: RemoteConfig,
+    key: string,
+    options: FireSignalOptions<number> = {},
+): FireSignal<number> {
+  return parameterSignal({remoteConfig, key, getter: baseGetNumber}, options);
 }
 
-export function getBoolean(remoteConfig: RemoteConfig, key: string) {
-  const getter = baseGetBoolean;
-  return parameter$<boolean>({remoteConfig, key, getter});
+export function getBooleanSignal(
+    remoteConfig: RemoteConfig,
+    key: string,
+    options: FireSignalOptions<boolean> = {},
+): FireSignal<boolean> {
+  return parameterSignal({remoteConfig, key, getter: baseGetBoolean}, options);
 }
 
-export function getAll(remoteConfig: RemoteConfig) {
-  const getter = baseGetAll;
-  // No key is needed for getAll()
-  return parameter$<AllParameters>({remoteConfig, key: '', getter});
+export function getAllSignal(
+    remoteConfig: RemoteConfig,
+    options: FireSignalOptions<AllParameters> = {},
+): FireSignal<AllParameters> {
+  return parameterSignal({
+    remoteConfig,
+    key: '',
+    getter: (config) => baseGetAll(config),
+  }, options);
 }

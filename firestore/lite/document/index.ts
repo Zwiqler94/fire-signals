@@ -15,27 +15,36 @@
  * limitations under the License.
  */
 
-// TODO fix the import
 import {DocumentReference, DocumentSnapshot, DocumentData} from '../interfaces';
-import {map} from 'rxjs/operators';
-import {from, Observable} from 'rxjs';
-import {getDoc} from 'firebase/firestore/lite';
+import {FireSignal, FireSignalOptions, mapFireSignal} from '../../../core';
+import {fromRefSignal} from '../fromRef';
 
-export function doc<T=DocumentData>(ref: DocumentReference<T>): Observable<DocumentSnapshot<T>> {
-  return from(getDoc<T, DocumentData>(ref));
+export function docSignal<T=DocumentData>(
+    ref: DocumentReference<T>,
+    options: FireSignalOptions<DocumentSnapshot<T>> = {},
+): FireSignal<DocumentSnapshot<T>> {
+  return fromRefSignal(ref, options);
 }
 
 /**
  * Returns a stream of a document, mapped to its data payload and optionally the document ID
  * @param query
  */
-export function docData<T=DocumentData>(
+export function docDataSignal<T=DocumentData>(
     ref: DocumentReference<T>,
     options: {
     idField?: string
   }={},
-): Observable<T> {
-  return doc(ref).pipe(map((snap) => snapToData(snap, options) as T));
+    signalOptions: FireSignalOptions<T | undefined> = {},
+): FireSignal<T | undefined> {
+  return mapFireSignal(
+      docSignal(ref, {
+        injector: signalOptions.injector,
+        debugName: signalOptions.debugName,
+      }),
+      (snap) => snapToData(snap, options) as T,
+      signalOptions,
+  );
 }
 
 export function snapToData<T=DocumentData>(

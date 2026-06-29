@@ -16,16 +16,18 @@
  */
 
 import {QueryChange, ListenEvent, Query} from '../interfaces';
-import {fromRef} from '../fromRef';
-import {Observable} from 'rxjs';
-import {map} from 'rxjs/operators';
+import {fromRefSignal} from '../fromRef';
+import {FireSignal, FireSignalOptions, mapFireSignal} from '../../core';
 
 /**
  * Get the snapshot changes of an object
  * @param query
  */
-export function object(query: Query): Observable<QueryChange> {
-  return fromRef(query, ListenEvent.value);
+export function objectSignal(
+    query: Query,
+    options: FireSignalOptions<QueryChange> = {},
+): FireSignal<QueryChange> {
+  return fromRefSignal(query, ListenEvent.value, options);
 }
 
 /**
@@ -33,9 +35,18 @@ export function object(query: Query): Observable<QueryChange> {
  * @param query object ref or query
  * @param keyField map the object key to a specific field
  */
-export function objectVal<T>(query: Query, options: { keyField?: string }={}): Observable<T> {
-  return fromRef(query, ListenEvent.value).pipe(
-      map((change) => changeToData(change, options) as T),
+export function objectValSignal<T>(
+    query: Query,
+    options: { keyField?: string }={},
+    signalOptions: FireSignalOptions<T> = {},
+): FireSignal<T> {
+  return mapFireSignal(
+      objectSignal(query, {
+        injector: signalOptions.injector,
+        debugName: signalOptions.debugName,
+      }),
+      (change) => changeToData(change, options) as T,
+      signalOptions,
   );
 }
 

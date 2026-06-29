@@ -1,13 +1,25 @@
 import {getDoc, getDocs} from 'firebase/firestore/lite';
-import {from, Observable} from 'rxjs';
+import {FireSignal, FireSignalOptions, fromPromiseSignal} from '../../core';
 import {DocumentReference, DocumentData, Query, DocumentSnapshot, QuerySnapshot} from './interfaces';
 
-export function fromRef<T=DocumentData>(ref: DocumentReference<T>): Observable<DocumentSnapshot<T>>;
-export function fromRef<T=DocumentData>(ref: Query<T>): Observable<QuerySnapshot<T>>;
-export function fromRef<T=DocumentData>(ref: DocumentReference<T>|Query<T>): Observable<DocumentSnapshot<T> | QuerySnapshot<T>> {
-  if (ref.type === 'document') {
-    return from(getDoc<T, DocumentData>(ref));
-  } else {
-    return from(getDocs<T, DocumentData>(ref));
-  }
+export function fromRefSignal<T=DocumentData>(
+    ref: DocumentReference<T>,
+    options?: FireSignalOptions<DocumentSnapshot<T>>,
+): FireSignal<DocumentSnapshot<T>>;
+export function fromRefSignal<T=DocumentData>(
+    ref: Query<T>,
+    options?: FireSignalOptions<QuerySnapshot<T>>,
+): FireSignal<QuerySnapshot<T>>;
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function fromRefSignal<T=DocumentData>(
+    ref: DocumentReference<T>|Query<T>,
+    options: FireSignalOptions<any> = {},
+): FireSignal<DocumentSnapshot<T> | QuerySnapshot<T>> {
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  return fromPromiseSignal(() => {
+    if (ref.type === 'document') {
+      return getDoc<T, DocumentData>(ref);
+    }
+    return getDocs<T, DocumentData>(ref);
+  }, options);
 }

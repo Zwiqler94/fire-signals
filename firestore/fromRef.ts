@@ -17,25 +17,33 @@
 
 // TODO figure out what is wrong with the types...
 import {onSnapshot} from 'firebase/firestore';
-import {Observable} from 'rxjs';
+import {createFireSignal, FireSignal, FireSignalOptions} from '../core';
 import {DocumentReference, DocumentData, SnapshotListenOptions, Query, DocumentSnapshot, QuerySnapshot} from './interfaces';
 
 const DEFAULT_OPTIONS = {includeMetadataChanges: false};
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function fromRef<T=DocumentData>(ref: DocumentReference<T>, options?: SnapshotListenOptions): Observable<DocumentSnapshot<T>>;
-export function fromRef<T=DocumentData>(ref: Query<T>, options?: SnapshotListenOptions): Observable<QuerySnapshot<T>>;
-export function fromRef(
+export function fromRefSignal<T=DocumentData>(
+    ref: DocumentReference<T>,
+    options?: SnapshotListenOptions,
+    signalOptions?: FireSignalOptions<DocumentSnapshot<T>>,
+): FireSignal<DocumentSnapshot<T>>;
+export function fromRefSignal<T=DocumentData>(
+    ref: Query<T>,
+    options?: SnapshotListenOptions,
+    signalOptions?: FireSignalOptions<QuerySnapshot<T>>,
+): FireSignal<QuerySnapshot<T>>;
+export function fromRefSignal(
     ref: any,
     options: SnapshotListenOptions=DEFAULT_OPTIONS,
-): Observable<any> {
+    signalOptions: FireSignalOptions<any> = {},
+): FireSignal<any> {
   /* eslint-enable @typescript-eslint/no-explicit-any */
-  return new Observable((subscriber) => {
-    const unsubscribe = onSnapshot(ref, options, {
-      next: subscriber.next.bind(subscriber),
-      error: subscriber.error.bind(subscriber),
-      complete: subscriber.complete.bind(subscriber),
+  return createFireSignal((controller) => {
+    return onSnapshot(ref, options, {
+      next: (snapshot) => controller.next(snapshot),
+      error: (error) => controller.error(error),
+      complete: () => controller.complete(),
     });
-    return {unsubscribe};
-  });
+  }, signalOptions);
 }

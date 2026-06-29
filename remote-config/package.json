@@ -1,5 +1,5 @@
 {
-    "name": "rxfire/remote-config",
+    "name": "@zwiqler94/fire-signals/remote-config",
     "browser": "../dist/remote-config/index.esm.js",
     "main": "../dist/remote-config/index.cjs.js",
     "module": "../dist/remote-config/index.esm.js",

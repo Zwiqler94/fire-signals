@@ -17,13 +17,15 @@
 
 // TODO fix the import
 import {DocumentReference, DocumentSnapshot, DocumentData} from '../interfaces';
-import {fromRef} from '../fromRef';
-import {map} from 'rxjs/operators';
-import {Observable} from 'rxjs';
+import {fromRefSignal} from '../fromRef';
+import {FireSignal, FireSignalOptions, mapFireSignal} from '../../core';
 import {SnapshotOptions} from 'firebase/firestore';
 
-export function doc<T=DocumentData>(ref: DocumentReference<T>): Observable<DocumentSnapshot<T>> {
-  return fromRef(ref, {includeMetadataChanges: true});
+export function docSignal<T=DocumentData>(
+    ref: DocumentReference<T>,
+    options: FireSignalOptions<DocumentSnapshot<T>> = {},
+): FireSignal<DocumentSnapshot<T>> {
+  return fromRefSignal(ref, {includeMetadataChanges: true}, options);
 }
 
 /**
@@ -31,13 +33,21 @@ export function doc<T=DocumentData>(ref: DocumentReference<T>): Observable<Docum
  * @param query
  * @param options
  */
-export function docData<T=DocumentData, R extends T=T>(
+export function docDataSignal<T=DocumentData, R extends T=T>(
     ref: DocumentReference<T>,
     options: {
       idField?: keyof R,
     } & SnapshotOptions ={},
-): Observable<T | R | undefined> {
-  return doc(ref).pipe(map((snap) => snapToData(snap, options)));
+    signalOptions: FireSignalOptions<T | R | undefined> = {},
+): FireSignal<T | R | undefined> {
+  return mapFireSignal(
+      docSignal(ref, {
+        injector: signalOptions.injector,
+        debugName: signalOptions.debugName,
+      }),
+      (snap) => snapToData(snap, options),
+      signalOptions,
+  );
 }
 
 export function snapToData<T=DocumentData, R extends T=T>(

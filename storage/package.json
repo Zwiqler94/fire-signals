@@ -1,5 +1,5 @@
 {
-  "name": "rxfire/storage",
+  "name": "@zwiqler94/fire-signals/storage",
   "browser": "../dist/storage/index.esm.js",
   "main": "../dist/storage/index.cjs.js",
   "module": "../dist/storage/index.esm.js",

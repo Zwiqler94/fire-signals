@@ -1,5 +1,5 @@
 {
-  "name": "rxfire/functions",
+  "name": "@zwiqler94/fire-signals/functions",
   "browser": "../dist/functions/index.esm.js",
   "main": "../dist/functions/index.cjs.js",
   "module": "../dist/functions/index.esm.js",

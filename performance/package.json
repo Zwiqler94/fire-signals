@@ -1,5 +1,5 @@
 {
-  "name": "rxfire/performance",
+  "name": "@zwiqler94/fire-signals/performance",
   "browser": "../dist/performance/index.esm.js",
   "main": "../dist/performance/index.cjs.js",
   "module": "../dist/performance/index.esm.js",

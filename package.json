@@ -1,11 +1,14 @@
 {
-  "name": "rxfire",
-  "version": "6.1.0",
-  "private": true,
-  "description": "Firebase JavaScript library RxJS",
-  "author": "Firebase <firebase-support@google.com> (https://firebase.google.com/)",
+  "name": "@zwiqler94/fire-signals",
+  "version": "21.0.0-rc.0",
+  "private": false,
+  "description": "Angular signal-first Firebase helpers rearchitected from RxFire",
+  "author": "Zwiqler94",
+  "contributors": [
+    "Firebase <firebase-support@google.com> (https://firebase.google.com/)"
+  ],
   "license": "Apache-2.0",
-  "homepage": "https://firebase.google.com/",
+  "homepage": "https://github.com/Zwiqler94/fire-signals#readme",
   "browser": "dist/index.esm.js",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
@@ -65,12 +68,13 @@
     "firebase",
     "realtime",
     "storage",
-    "rxjs",
+    "signals",
+    "angular-signals",
     "notifications"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/firebaseextended/rxfire.git"
+    "url": "git+https://github.com/Zwiqler94/fire-signals.git"
   },
   "scripts": {
     "lint": "eslint -c .eslintrc.js '**/*.ts' --ignore-path './.gitignore'",
@@ -78,49 +82,64 @@
     "build": "run-s build:**",
     "build:clean": "rm -rf dist",
     "build:types": "tsc --emitDeclarationOnly",
-    "build:rollup": "rollup -c",
-    "build:docs": "cp README.md ./dist/ && cp -r ./docs ./dist/",
-    "dev": "rollup -c -w",
+    "build:rollup": "node scripts/build-rollup.mjs",
+    "build:docs": "cp README.md LICENSE NOTICE ./dist/ && cp -r ./docs ./dist/",
+    "dev": "rollup -c rollup.config.mjs -w",
     "echo:chrome": "echo 'Open Chrome DevTools: \nchrome://inspect/#devices'",
-    "test": "npx -y firebase-tools@latest emulators:exec \"jest --detectOpenHandles\" --project=rxfire-test-c497c",
-    "test:debug": "yarn echo:chrome && firebase emulators:exec ./test-debug.sh --project=rxfire-test-c497c",
-    "emulators": "npx -y firebase-tools@latest emulators:start --project=rxfire-test-c497c",
-    "jest": "jest --detectOpenHandles"
+    "test": "vitest run",
+    "test:emulators": "npx -y firebase-tools@latest emulators:exec \"vitest run --config vitest.emulators.config.ts\" --project=demo-fire-signals",
+    "test:debug": "yarn echo:chrome && firebase emulators:exec ./test-debug.sh --project=demo-fire-signals",
+    "emulators": "npx -y firebase-tools@latest emulators:start --project=demo-fire-signals",
+    "test:watch": "vitest",
+    "artifactregistry-login": "npx google-artifactregistry-auth",
+    "publish:dry-run": "npm publish ./dist --@zwiqler94:registry=https://us-central1-npm.pkg.dev/jlz-portfolio/angular-libraries/ --registry=https://us-central1-npm.pkg.dev/jlz-portfolio/angular-libraries/ --tag rc --dry-run",
+    "publish:registry": "npm publish ./dist --@zwiqler94:registry=https://us-central1-npm.pkg.dev/jlz-portfolio/angular-libraries/ --registry=https://us-central1-npm.pkg.dev/jlz-portfolio/angular-libraries/ --tag rc"
   },
   "peerDependencies": {
-    "firebase": "^9.0.0 || ^10.0.0 || ^11.0.0",
-    "rxjs": "^6.0.0 || ^7.0.0"
+    "@angular/core": "^21.0.0",
+    "firebase": "^12.0.0"
   },
   "devDependencies": {
+    "@angular/core": "^21.2.16",
     "@babel/core": "^7.12.10",
     "@babel/preset-env": "^7.12.11",
     "@babel/preset-typescript": "^7.12.7",
-    "@rollup/plugin-commonjs": "^15.1.0",
-    "@rollup/plugin-node-resolve": "^9.0.0",
-    "@rollup/plugin-typescript": "^8.1.0",
-    "@types/jest": "^29.5.4",
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-typescript": "^12.3.0",
     "@typescript-eslint/eslint-plugin": "^6.4.1",
     "@typescript-eslint/parser": "^6.4.1",
-    "babel-jest": "^29.6.4",
     "cross-fetch": "^3.1.4",
     "eslint": "^7.32.0",
     "eslint-config-google": "^0.14.0",
-    "firebase": "^10.0.0",
+    "firebase": "^12.4.0",
     "glob": "^7.1.6",
-    "jest": "^29.6.4",
-    "jest-environment-jsdom": "^29.6.4",
+    "jsdom": "^25.0.1",
     "md5": "^2.3.0",
     "npm-run-all": "^4.1.5",
-    "rollup": "^2.33.2",
-    "rollup-plugin-generate-package-json": "^3.2.0",
-    "rxjs": "^7.0.0",
+    "rollup": "^4.61.1",
     "tslib": "^2.6.0",
-    "typescript": "^5.2.2",
+    "typescript": ">=5.9 <6.0",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8",
     "xhr2": "^0.2.1"
   },
   "files": [
     "dist/**/*",
     "README.md",
+    "LICENSE",
+    "NOTICE",
     "docs/**/*"
-  ]
+  ],
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "protobufjs@7.6.4": true,
+    "@firebase/util@1.15.1": true
+  },
+  "bugs": {
+    "url": "https://github.com/Zwiqler94/fire-signals/issues"
+  },
+  "publishConfig": {
+    "registry": "https://us-central1-npm.pkg.dev/jlz-portfolio/angular-libraries/"
+  }
 }

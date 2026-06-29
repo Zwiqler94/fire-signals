@@ -15,76 +15,77 @@
  * limitations under the License.
  */
 
-import {Observable} from 'rxjs';
+import {effect} from '@angular/core';
+import {FireSignal, FireSignalOptions, createFireSignal} from '../../core';
 import {QueryChange, ListenEvent, Query} from '../interfaces';
-import {fromRef} from '../fromRef';
-import {map, withLatestFrom, scan, skipWhile} from 'rxjs/operators';
-import {stateChanges} from './index';
+import {fromRefSignal} from '../fromRef';
+import {stateChangesSignal} from './index';
 
-interface LoadedMetadata {
-  data: QueryChange;
-  lastKeyToLoad: unknown;
-}
-
-export function auditTrail(
+export function auditTrailSignal(
     query: Query,
     options: {
     events?: ListenEvent[]
   }={},
-): Observable<QueryChange[]> {
-  const auditTrail$ = stateChanges(query, options).pipe(
-      scan<QueryChange, QueryChange[]>(
-          (current, changes) => [...current, changes],
-          [],
-      ),
-  );
-  return waitForLoaded(query, auditTrail$);
-}
+    signalOptions: FireSignalOptions<QueryChange[]> = {},
+): FireSignal<QueryChange[]> {
+  return createFireSignal((controller) => {
+    let changes: QueryChange[] = [];
+    let lastKeyToLoad: string | null | undefined;
+    let loaded = false;
 
-function loadedData(query: Query): Observable<LoadedMetadata> {
-  // Create an observable of loaded values to retrieve the
-  // known dataset. This will allow us to know what key to
-  // emit the "whole" array at when listening for child events.
-  return fromRef(query, ListenEvent.value).pipe(
-      map((data) => {
-      // Store the last key in the data set
-        let lastKeyToLoad;
-        // Loop through loaded dataset to find the last key
-        data.snapshot.forEach((child) => {
-          lastKeyToLoad = child.key;
-          return false;
-        });
-        // return data set and the current last key loaded
-        return {data, lastKeyToLoad};
-      }),
-  );
-}
+    const value = fromRefSignal(query, ListenEvent.value, {
+      injector: signalOptions.injector,
+      debugName: signalOptions.debugName,
+    });
+    const child = stateChangesSignal(query, options, {
+      injector: signalOptions.injector,
+      debugName: signalOptions.debugName,
+    });
 
-function waitForLoaded(
-    query: Query,
-    snap$: Observable<QueryChange[]>,
-): Observable<QueryChange[]> {
-  const loaded$ = loadedData(query);
-  return loaded$.pipe(
-      withLatestFrom(snap$),
-      // Get the latest values from the "loaded" and "child" datasets
-      // We can use both datasets to form an array of the latest values.
-      map(([loaded, changes]) => {
-      // Store the last key in the data set
-        const lastKeyToLoad = loaded.lastKeyToLoad;
-        // Store all child keys loaded at this point
-        const loadedKeys = changes.map((change) => change.snapshot.key);
-        return {changes, lastKeyToLoad, loadedKeys};
-      }),
-      // This is the magical part, only emit when the last load key
-      // in the dataset has been loaded by a child event. At this point
-      // we can assume the dataset is "whole".
-      skipWhile(
-          (meta) =>
-            meta.loadedKeys.indexOf(meta.lastKeyToLoad as string | null) === -1,
-      ),
-      // Pluck off the meta data because the user only cares
-      // to iterate through the snapshots
-      map((meta) => meta.changes),
-  );
+    const emitIfLoaded = () => {
+      if (!loaded) {
+        return;
+      }
+      if (lastKeyToLoad == null || changes.some((change) => change.snapshot.key === lastKeyToLoad)) {
+        controller.next(changes);
+      }
+    };
+
+    const stopValueEffect = effect(() => {
+      if (value.status() === 'error') {
+        controller.error(value.error());
+        return;
+      }
+      if (!value.hasValue()) {
+        return;
+      }
+
+      lastKeyToLoad = undefined;
+      value.value()?.snapshot.forEach((snapshot) => {
+        lastKeyToLoad = snapshot.key;
+        return false;
+      });
+      loaded = true;
+      emitIfLoaded();
+    }, {injector: signalOptions.injector});
+
+    const stopChildEffect = effect(() => {
+      if (child.status() === 'error') {
+        controller.error(child.error());
+        return;
+      }
+      if (!child.hasValue()) {
+        return;
+      }
+      changes = [...changes, child.value() as QueryChange];
+      emitIfLoaded();
+    }, {injector: signalOptions.injector});
+
+    return () => {
+      stopChildEffect.destroy();
+      stopValueEffect.destroy();
+      child.destroy();
+      value.destroy();
+    };
+  }, signalOptions);
 }
