@@ -1,6 +1,6 @@
 {
   "name": "@zwiqler94/fire-signals",
-  "version": "21.0.0-rc.0",
+  "version": "21.0.0-rc.0-publish-test",
   "private": false,
   "description": "Angular signal-first Firebase helpers rearchitected from RxFire",
   "author": "Zwiqler94",
@@ -88,7 +88,7 @@
     "echo:chrome": "echo 'Open Chrome DevTools: \nchrome://inspect/#devices'",
     "test": "vitest run",
     "test:emulators": "npx -y firebase-tools@latest emulators:exec \"vitest run --config vitest.emulators.config.ts\" --project=demo-fire-signals",
-    "test:debug": "yarn echo:chrome && firebase emulators:exec ./test-debug.sh --project=demo-fire-signals",
+    "test:debug": "npm run echo:chrome && firebase emulators:exec ./test-debug.sh --project=demo-fire-signals",
     "emulators": "npx -y firebase-tools@latest emulators:start --project=demo-fire-signals",
     "test:watch": "vitest",
     "artifactregistry-login": "npx google-artifactregistry-auth",

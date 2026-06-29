@@ -13,7 +13,6 @@ stability, and future Angular resource interop.
 
 ```bash
 npm i @zwiqler94/fire-signals firebase @angular/core
-yarn add @zwiqler94/fire-signals firebase @angular/core
 ```
 
 Firebase and Angular are peer dependencies. RxJS is not a FireSignals public
