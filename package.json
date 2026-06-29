@@ -88,7 +88,7 @@
     "echo:chrome": "echo 'Open Chrome DevTools: \nchrome://inspect/#devices'",
     "test": "vitest run",
     "test:emulators": "npx -y firebase-tools@latest emulators:exec \"vitest run --config vitest.emulators.config.ts\" --project=demo-fire-signals",
-    "test:debug": "npm run echo:chrome && firebase emulators:exec ./test-debug.sh --project=demo-fire-signals",
+    "test:debug": "npm run echo:chrome && npx -y firebase-tools@latest emulators:exec ./test-debug.sh --project=demo-fire-signals",
     "emulators": "npx -y firebase-tools@latest emulators:start --project=demo-fire-signals",
     "test:watch": "vitest",
     "artifactregistry-login": "npx google-artifactregistry-auth",
