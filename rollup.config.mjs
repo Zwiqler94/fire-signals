@@ -19,11 +19,12 @@ import { resolve, dirname, relative, join } from 'path';
 import resolveModule from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
-import { peerDependencies, dependencies } from './package.json';
-import { sync as globSync } from 'glob';
-import { readFileSync } from 'fs';
-import generatePackageJson from 'rollup-plugin-generate-package-json';
+import glob from 'glob';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 
+const { sync: globSync } = glob;
+const rootPackage = JSON.parse(readFileSync('package.json', { encoding: 'utf-8'} ));
+const { peerDependencies, dependencies } = rootPackage;
 const packageJsonPaths = globSync('**/package.json', { ignore: ['node_modules/**', 'dist/**', 'test/**'] });
 const packages = packageJsonPaths.reduce((acc, path) => {
   const pkg = JSON.parse(readFileSync(path, { encoding: 'utf-8'} ));
@@ -50,6 +51,7 @@ const external = [
   'firebase/database',
   'firebase/remote-config',
   'firebase/performance',
+  '@angular/core',
   '@firebase/firestore',
   '@firebase/firestore/lite',
   '@firebase/auth',
@@ -58,12 +60,10 @@ const external = [
   '@firebase/database',
   '@firebase/remote-config',
   '@firebase/performance',
-  'rxjs/operators'
 ];
 
 const globals = {
-  //rxfire: GLOBAL_NAME,
-  rxjs: 'rxjs',
+  '@angular/core': 'ng.core',
   tslib: 'tslib',
   ...Object.values(packages).reduce((acc, {name}) => (acc[name] = name.replace(/\//g, '.'), acc), {}),
   'firebase/firestore': 'firebase.firestore',
@@ -82,8 +82,20 @@ const globals = {
   '@firebase/database': 'firebase.database',
   '@firebase/remote-config': 'firebase.remote-config',
   '@firebase/performance': 'firebase.performance',
-  'rxjs/operators': 'rxjs.operators',
 };
+
+function writePackageJson(outputFolder, baseContents) {
+  return {
+    name: 'write-package-json',
+    generateBundle() {
+      mkdirSync(outputFolder, { recursive: true });
+      writeFileSync(
+          join(outputFolder, 'package.json'),
+          `${JSON.stringify(baseContents, null, 2)}\n`,
+      );
+    },
+  };
+}
 
 export default Object.keys(packages)
   .map(component => {
@@ -119,9 +131,12 @@ export default Object.keys(packages)
         ],
         plugins: [
           ...plugins,
-          // TS sourceMaps conflict with Rollup sourceMaps
-          typescript({ sourceMap: false }),
-          generatePackageJson({ outputFolder, baseContents }),
+          typescript({
+            sourceMap: true,
+            declaration: false,
+            declarationMap: false,
+          }),
+          writePackageJson(outputFolder, baseContents),
         ],
         external
       },
