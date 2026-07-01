@@ -1,0 +1,8 @@
+{
+  "name": "@zwiqler94/fire-signals/app",
+  "browser": "../dist/app/index.esm.js",
+  "main": "../dist/app/index.cjs.js",
+  "module": "../dist/app/index.esm.js",
+  "typings": "../dist/app/index.d.ts",
+  "sideEffects": false
+}

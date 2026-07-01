@@ -1,0 +1,8 @@
+{
+  "name": "@zwiqler94/fire-signals/app-check",
+  "browser": "../dist/app-check/index.esm.js",
+  "main": "../dist/app-check/index.cjs.js",
+  "module": "../dist/app-check/index.esm.js",
+  "typings": "../dist/app-check/index.d.ts",
+  "sideEffects": false
+}

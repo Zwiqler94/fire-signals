@@ -19,10 +19,35 @@
       "require": "./index.cjs.js",
       "types": "./index.d.ts"
     },
+    "./ai": {
+      "import": "./ai/index.esm.js",
+      "require": "./ai/index.cjs.js",
+      "types": "./ai/index.d.ts"
+    },
+    "./analytics": {
+      "import": "./analytics/index.esm.js",
+      "require": "./analytics/index.cjs.js",
+      "types": "./analytics/index.d.ts"
+    },
+    "./app": {
+      "import": "./app/index.esm.js",
+      "require": "./app/index.cjs.js",
+      "types": "./app/index.d.ts"
+    },
+    "./app-check": {
+      "import": "./app-check/index.esm.js",
+      "require": "./app-check/index.cjs.js",
+      "types": "./app-check/index.d.ts"
+    },
     "./auth": {
       "import": "./auth/index.esm.js",
       "require": "./auth/index.cjs.js",
       "types": "./auth/index.d.ts"
+    },
+    "./data-connect": {
+      "import": "./data-connect/index.esm.js",
+      "require": "./data-connect/index.cjs.js",
+      "types": "./data-connect/index.d.ts"
     },
     "./database": {
       "import": "./database/index.esm.js",
@@ -43,6 +68,11 @@
       "import": "./functions/index.esm.js",
       "require": "./functions/index.cjs.js",
       "types": "./functions/index.d.ts"
+    },
+    "./messaging": {
+      "import": "./messaging/index.esm.js",
+      "require": "./messaging/index.cjs.js",
+      "types": "./messaging/index.d.ts"
     },
     "./performance": {
       "import": "./performance/index.esm.js",

@@ -1,0 +1,8 @@
+{
+  "name": "@zwiqler94/fire-signals/messaging",
+  "browser": "../dist/messaging/index.esm.js",
+  "main": "../dist/messaging/index.cjs.js",
+  "module": "../dist/messaging/index.esm.js",
+  "typings": "../dist/messaging/index.d.ts",
+  "sideEffects": false
+}

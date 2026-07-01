@@ -1,0 +1,8 @@
+{
+  "name": "@zwiqler94/fire-signals/analytics",
+  "browser": "../dist/analytics/index.esm.js",
+  "main": "../dist/analytics/index.cjs.js",
+  "module": "../dist/analytics/index.esm.js",
+  "typings": "../dist/analytics/index.d.ts",
+  "sideEffects": false
+}

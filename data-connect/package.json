@@ -1,0 +1,8 @@
+{
+  "name": "@zwiqler94/fire-signals/data-connect",
+  "browser": "../dist/data-connect/index.esm.js",
+  "main": "../dist/data-connect/index.cjs.js",
+  "module": "../dist/data-connect/index.esm.js",
+  "typings": "../dist/data-connect/index.d.ts",
+  "sideEffects": false
+}
