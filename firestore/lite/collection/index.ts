@@ -20,8 +20,11 @@ import {Query, QueryDocumentSnapshot, DocumentData, CountSnapshot} from '../inte
 import {getDocs, getCount} from 'firebase/firestore/lite';
 import {FireSignal, FireSignalOptions, fromPromiseSignal, mapFireSignal} from '../../../core';
 
+type DataWithId<T, U extends string> = T | (NonNullable<T> & { [K in U]: string });
+
 /**
- * Return a stream of document snapshots on a query. These results are in sort order.
+ * Creates a FireSignal of document snapshots from a one-shot query read in sort
+ * order.
  * @param query
  */
 export function collectionSignal<T=DocumentData>(
@@ -39,22 +42,23 @@ export function collectionSignal<T=DocumentData>(
 }
 
 /**
- * Returns a stream of documents mapped to their data payload, and optionally the document ID
+ * Creates a FireSignal of query document data from a one-shot read, optionally
+ * adding the document ID.
  * @param query
  */
-export function collectionDataSignal<T=DocumentData>(
+export function collectionDataSignal<T=DocumentData, U extends string=never>(
     query: Query<T>,
     options: {
-    idField?: string
+    idField?: U
   }={},
-    signalOptions: FireSignalOptions<T[]> = {},
-): FireSignal<T[]> {
+    signalOptions: FireSignalOptions<DataWithId<T, U>[]> = {},
+): FireSignal<DataWithId<T, U>[]> {
   return mapFireSignal(
       collectionSignal(query, {
         injector: signalOptions.injector,
         debugName: signalOptions.debugName,
       }),
-      (arr) => arr.map((snap) => snapToData(snap, options) as T),
+      (arr) => arr.map((snap) => snapToData(snap, options)!),
       signalOptions,
   );
 }

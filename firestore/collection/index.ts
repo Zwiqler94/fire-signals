@@ -19,14 +19,13 @@ import {fromRefSignal} from '../fromRef';
 import {createFireSignal, FireSignal, FireSignalOptions, mapFireSignal} from '../../core';
 import {snapToData} from '../document';
 import {DocumentChangeType, DocumentChange, Query, QueryDocumentSnapshot, QuerySnapshot, DocumentData} from '../interfaces';
-import {SnapshotOptions, getCountFromServer, onSnapshot, refEqual} from 'firebase/firestore';
-import {CountSnapshot} from '../lite/interfaces';
+import {getCountFromServer, onSnapshot, refEqual} from 'firebase/firestore';
+import type {SnapshotOptions} from 'firebase/firestore';
+import type {CountSnapshot} from '../lite/interfaces';
 const ALL_EVENTS: DocumentChangeType[] = ['added', 'modified', 'removed'];
 
 /**
- * Create an operator that determines if a the stream of document changes
- * are specified by the event filter. If the document change type is not
- * in specified events array, it will not be emitted.
+ * Returns whether any document change matches the event filter.
  */
 function hasWantedEvents<T>(
     changes: DocumentChange<T>[],
@@ -70,8 +69,8 @@ function processIndividualChange<T>(
         combined[change.newIndex] &&
         refEqual(combined[change.newIndex].doc.ref, change.doc.ref)
       ) {
-        // Skip duplicate emissions. This is rare.
-        // TODO: Investigate possible bug in SDK.
+        // Repeated added changes for a ref already at this index are no-ops,
+        // keeping the sorted change list idempotent.
       } else {
         return sliceAndSplice(combined, change.newIndex, 0, change);
       }
@@ -127,10 +126,6 @@ function processDocumentChanges<T>(
   return current;
 }
 
-/**
- * Create an operator that allows you to compare the current emission with
- * the prior, even on first emission (where prior is undefined).
- */
 /**
  * Given two snapshots does their metadata match?
  * @param a
@@ -197,8 +192,8 @@ function listenCollectionChanges<T>(
 }
 
 /**
- * Return a stream of document changes on a query. These results are not in sort order but in
- * order of occurence.
+ * Creates a FireSignal of document changes for a query. These results are not in
+ * sort order, but in order of occurrence.
  * @param query
  */
 export function collectionChangesSignal<T=DocumentData>(
@@ -220,7 +215,7 @@ export function collectionChangesSignal<T=DocumentData>(
 }
 
 /**
- * Return a stream of document snapshots on a query. These results are in sort order.
+ * Creates a FireSignal of document snapshots for a query in sort order.
  * @param query
  */
 export function collectionSignal<T=DocumentData>(
@@ -238,7 +233,7 @@ export function collectionSignal<T=DocumentData>(
 }
 
 /**
- * Return a stream of document changes on a query. These results are in sort order.
+ * Creates a FireSignal of document changes accumulated in query sort order.
  * @param query
  */
 export function sortedChangesSignal<T=DocumentData>(
@@ -264,8 +259,8 @@ export function sortedChangesSignal<T=DocumentData>(
 }
 
 /**
- * Create a stream of changes as they occur it time. This method is similar
- * to docChanges() but it collects each event in an array over time.
+ * Creates a FireSignal that accumulates changes as they occur, similar to
+ * docChanges().
  */
 export function auditTrailSignal<T=DocumentData>(
     query: Query<T>,
@@ -290,7 +285,7 @@ export function auditTrailSignal<T=DocumentData>(
 }
 
 /**
- * Returns a stream of documents mapped to their data payload, and optionally the document ID
+ * Creates a FireSignal of query document data, optionally adding the document ID.
  * @param query
  * @param options
  */

@@ -15,14 +15,13 @@
  * limitations under the License.
  */
 
-// TODO figure out what is wrong with the types...
 import {onSnapshot} from 'firebase/firestore';
 import {createFireSignal, FireSignal, FireSignalOptions} from '../core';
 import {DocumentReference, DocumentData, SnapshotListenOptions, Query, DocumentSnapshot, QuerySnapshot} from './interfaces';
 
 const DEFAULT_OPTIONS = {includeMetadataChanges: false};
+type FirestoreReference<T> = DocumentReference<T> | Query<T>;
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export function fromRefSignal<T=DocumentData>(
     ref: DocumentReference<T>,
     options?: SnapshotListenOptions,
@@ -33,17 +32,26 @@ export function fromRefSignal<T=DocumentData>(
     options?: SnapshotListenOptions,
     signalOptions?: FireSignalOptions<QuerySnapshot<T>>,
 ): FireSignal<QuerySnapshot<T>>;
-export function fromRefSignal(
-    ref: any,
+export function fromRefSignal<T=DocumentData>(
+    ref: FirestoreReference<T>,
     options: SnapshotListenOptions=DEFAULT_OPTIONS,
-    signalOptions: FireSignalOptions<any> = {},
-): FireSignal<any> {
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-  return createFireSignal((controller) => {
+    signalOptions: FireSignalOptions<DocumentSnapshot<T>> | FireSignalOptions<QuerySnapshot<T>> = {},
+): FireSignal<DocumentSnapshot<T> | QuerySnapshot<T>> {
+  if (ref.type === 'document') {
+    return createFireSignal<DocumentSnapshot<T>>((controller) => {
+      return onSnapshot(ref, options, {
+        next: (snapshot) => controller.next(snapshot),
+        error: (error) => controller.error(error),
+        complete: () => controller.complete(),
+      });
+    }, signalOptions as FireSignalOptions<DocumentSnapshot<T>>);
+  }
+
+  return createFireSignal<QuerySnapshot<T>>((controller) => {
     return onSnapshot(ref, options, {
       next: (snapshot) => controller.next(snapshot),
       error: (error) => controller.error(error),
       complete: () => controller.complete(),
     });
-  }, signalOptions);
+  }, signalOptions as FireSignalOptions<QuerySnapshot<T>>);
 }

@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-// TODO fix the import
 import {DocumentReference, DocumentSnapshot, DocumentData} from '../interfaces';
 import {fromRefSignal} from '../fromRef';
 import {FireSignal, FireSignalOptions, mapFireSignal} from '../../core';
-import {SnapshotOptions} from 'firebase/firestore';
+import type {SnapshotOptions} from 'firebase/firestore';
 
 export function docSignal<T=DocumentData>(
     ref: DocumentReference<T>,
@@ -29,7 +28,7 @@ export function docSignal<T=DocumentData>(
 }
 
 /**
- * Returns a stream of a document, mapped to its data payload and optionally the document ID
+ * Creates a FireSignal of document data, optionally adding the document ID.
  * @param query
  * @param options
  */

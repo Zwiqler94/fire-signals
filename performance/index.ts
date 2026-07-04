@@ -75,9 +75,9 @@ function mirrorTraceSignal<T>(
  * Begins a trace and ends it when the source signal first has a value.
  */
 export const traceSignal = <T = unknown>(
-    name: string,
-    source: FireSignal<T>,
-    options: FireSignalOptions<T> = {},
+  name: string,
+  source: FireSignal<T>,
+  options: FireSignalOptions<T> = {},
 ): FireSignal<T> => {
   const endTrace = startTrace(name);
   return mirrorTraceSignal(source, options, () => endTrace(), undefined, endTrace);
@@ -87,10 +87,10 @@ export const traceSignal = <T = unknown>(
  * Begins a trace and ends it when the test resolves to true.
  */
 export const traceUntilSignal = <T = unknown>(
-    name: string,
-    source: FireSignal<T>,
-    test: (value: T) => boolean,
-    options: TraceSignalOptions<T> = {},
+  name: string,
+  source: FireSignal<T>,
+  test: (value: T) => boolean,
+  options: TraceSignalOptions<T> = {},
 ): FireSignal<T> => {
   const endTrace = startTrace(name);
   return mirrorTraceSignal(
@@ -114,10 +114,10 @@ export const traceUntilSignal = <T = unknown>(
  * Begins a trace while the test resolves to true, and ends it once the test fails.
  */
 export const traceWhileSignal = <T = unknown>(
-    name: string,
-    source: FireSignal<T>,
-    test: (value: T) => boolean,
-    options: TraceSignalOptions<T> = {},
+  name: string,
+  source: FireSignal<T>,
+  test: (value: T) => boolean,
+  options: TraceSignalOptions<T> = {},
 ): FireSignal<T> => {
   let endTrace: (() => void) | undefined;
   const stopTrace = () => {
@@ -147,9 +147,9 @@ export const traceWhileSignal = <T = unknown>(
  * Begins a trace and ends it when the source is no longer loading.
  */
 export const traceUntilCompleteSignal = <T = unknown>(
-    name: string,
-    source: FireSignal<T>,
-    options: FireSignalOptions<T> = {},
+  name: string,
+  source: FireSignal<T>,
+  options: FireSignalOptions<T> = {},
 ): FireSignal<T> => {
   const endTrace = startTrace(name);
   return mirrorTraceSignal(source, options, () => undefined, () => endTrace(), endTrace);

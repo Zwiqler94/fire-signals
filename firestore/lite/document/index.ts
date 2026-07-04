@@ -19,6 +19,8 @@ import {DocumentReference, DocumentSnapshot, DocumentData} from '../interfaces';
 import {FireSignal, FireSignalOptions, mapFireSignal} from '../../../core';
 import {fromRefSignal} from '../fromRef';
 
+type DataWithId<T, U extends string> = T | (NonNullable<T> & { [K in U]: string });
+
 export function docSignal<T=DocumentData>(
     ref: DocumentReference<T>,
     options: FireSignalOptions<DocumentSnapshot<T>> = {},
@@ -27,41 +29,41 @@ export function docSignal<T=DocumentData>(
 }
 
 /**
- * Returns a stream of a document, mapped to its data payload and optionally the document ID
+ * Creates a FireSignal of document data from a one-shot read, optionally adding
+ * the document ID.
  * @param query
  */
-export function docDataSignal<T=DocumentData>(
+export function docDataSignal<T=DocumentData, U extends string=never>(
     ref: DocumentReference<T>,
     options: {
-    idField?: string
+    idField?: U
   }={},
-    signalOptions: FireSignalOptions<T | undefined> = {},
-): FireSignal<T | undefined> {
+    signalOptions: FireSignalOptions<DataWithId<T, U> | undefined> = {},
+): FireSignal<DataWithId<T, U> | undefined> {
   return mapFireSignal(
       docSignal(ref, {
         injector: signalOptions.injector,
         debugName: signalOptions.debugName,
       }),
-      (snap) => snapToData(snap, options) as T,
+      (snap) => snapToData(snap, options),
       signalOptions,
   );
 }
 
-export function snapToData<T=DocumentData>(
+export function snapToData<T=DocumentData, U extends string=never>(
     snapshot: DocumentSnapshot<T>,
     options: {
-      idField?: string,
+      idField?: U,
     }={},
-): {} | undefined {
-  // TODO clean up the typings
-  const data = snapshot.data() as any;
+): DataWithId<T, U> | undefined {
+  const data = snapshot.data();
   // match the behavior of the JS SDK when the snapshot doesn't exist
   // it's possible with data converters too that the user didn't return an object
-  if (!snapshot.exists() || typeof data !== 'object' || data === null) {
+  if (!snapshot.exists() || typeof data !== 'object' || data === null || !options.idField) {
     return data;
   }
-  if (options.idField) {
-    data[options.idField] = snapshot.id;
-  }
-  return data;
+  return {
+    ...data,
+    [options.idField]: snapshot.id,
+  } as NonNullable<T> & { [K in U]: string };
 }

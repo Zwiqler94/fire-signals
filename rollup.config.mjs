@@ -41,6 +41,29 @@ const packages = packageJsonPaths.reduce((acc, path) => {
 
 const plugins = [resolveModule(), commonjs()];
 
+const packageEntryFields = {
+  browser: 'index.esm.js',
+  main: 'index.cjs.js',
+  module: 'index.esm.js',
+  typings: 'index.d.ts',
+};
+
+function expectedPackageEntryPath(component, filename) {
+  return relative(component, join('dist', component, filename));
+}
+
+function assertPackageEntryPaths(component, pkg) {
+  Object.entries(packageEntryFields).forEach(([field, filename]) => {
+    const expected = expectedPackageEntryPath(component, filename);
+    if (pkg[field] !== expected) {
+      throw new Error(
+          `${pkg.name || component} package.json ${field} must be ` +
+          `${expected}; found ${pkg[field]}`,
+      );
+    }
+  });
+}
+
 const external = [
   ...Object.keys({ ...peerDependencies, ...dependencies }),
   'firebase/ai',
@@ -124,9 +147,9 @@ function writePackageJson(outputFolder, baseContents) {
 export default Object.keys(packages)
   .map(component => {
     const baseContents = packages[component];
+    assertPackageEntryPaths(component, baseContents);
     const { browser, main, module, typings } = baseContents;
     // rewrite the paths for dist folder
-    // TODO error if any of these don't match convention
     const outputFolder = join('dist', component);
     baseContents.browser = relative(outputFolder, resolve(component, browser));
     baseContents.main = relative(outputFolder, resolve(component, main));
